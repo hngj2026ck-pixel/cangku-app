@@ -1,5 +1,5 @@
 // 仓库软件电脑端（Electron）：打开线上网页 + 开机自启 + 托盘 + 新申报通知 + 每周自动备份
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, dialog, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, dialog, shell, nativeImage, screen, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,7 +8,7 @@ const KEEP_BACKUPS = 12;                 // 只保留最近 12 份备份
 const WEEK = 7 * 24 * 3600 * 1000;
 const BUILD = path.join(__dirname, 'build');
 
-let win = null, tray = null, quitting = false, pending = 0;
+let win = null, tray = null, quitting = false, pending = 0, pendingMax = false;
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 const loadSettings = () => { try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch (e) { return {}; } };
 const saveSettings = s => { try { fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2)); } catch (e) {} };
@@ -21,19 +21,30 @@ app.setAppUserModelId('com.cangku.desktop');
 function showWin(view) {
   if (!win) return;
   if (win.isMinimized()) win.restore();
+  if (pendingMax) { pendingMax = false; win.maximize(); }
   win.show(); win.focus();
   if (view) win.webContents.send('goto', view);
 }
 
-function createWindow(hidden) {
+async function createWindow(hidden) {
+  // 窗口大小：记住上次的位置和大小；第一次打开直接铺满屏幕（最大化）
+  const st = loadSettings(), wa = screen.getPrimaryDisplay().workArea;
+  const b = st.bounds || { width: Math.min(1600, wa.width), height: wa.height };
   win = new BrowserWindow({
-    width: 1100, height: 780, minWidth: 420, minHeight: 600, show: !hidden, title: '仓库',
+    ...b, minWidth: 420, minHeight: 600, show: false, title: '仓库',
     icon: path.join(BUILD, 'icon.png'), backgroundColor: '#E4E6E5', autoHideMenuBar: true,
     // 无边框：去掉 Windows 标题栏，最小化/最大化/关闭按钮画在网页顶栏右边
     titleBarStyle: 'hidden', titleBarOverlay: { color: '#E4E6E5', symbolColor: '#2B3438', height: 64 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   win.setMenu(null);
+  // 开机自启是藏在托盘里的；Windows 上隐藏时调用最大化会把窗口弹出来，所以等第一次打开时再最大化
+  if (st.maximized !== false) { if (hidden) pendingMax = true; else win.maximize(); }
+  if (!hidden) win.show();
+  const remember = () => { if (!win || win.isMinimized()) return; const s2 = loadSettings(); s2.maximized = win.isMaximized(); if (!s2.maximized) s2.bounds = win.getBounds(); saveSettings(s2); };
+  win.on('resized', remember); win.on('moved', remember); win.on('maximize', remember); win.on('unmaximize', remember);
+  // 每次启动清掉网页的普通缓存，保证拿到最新版本（离线用的缓存不受影响）
+  try { await session.defaultSession.clearCache(); } catch (e) {}
   win.loadURL(URL);
   win.webContents.on('did-fail-load', (_e, code, _d, url, isMain) => { if (isMain && code !== -3) win.loadFile(path.join(__dirname, 'offline.html')); });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });

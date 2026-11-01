@@ -202,8 +202,10 @@ body.wide nav.tabs button{flex:none;height:64px;padding:0 14px;font-size:15px;co
 body.wide nav.tabs button.on{color:var(--ink);font-weight:600}
 body.wide nav.tabs button.on::before{top:auto;bottom:-1px;left:14px;right:14px;height:2px;border-radius:0;background:var(--ink)}
 body.wide .badge{position:static;display:inline-grid;margin-left:5px;background:var(--signal);color:var(--ink);border-radius:3px;min-width:0;height:17px;font:600 12px var(--num);padding:0 5px;vertical-align:2px}
-body.wide main{max-width:none;padding:86px 32px 40px}
-body.wide.v-stock main{padding:76px 472px 40px 240px}
+/* 电脑端只让内容区滚动：滚动条从顶栏下面开始，库存页的滚动条贴着清单、不跑到右侧卡片外面 */
+body.wide main{max-width:none;position:fixed;top:64px;left:0;right:0;bottom:0;overflow-y:auto;overflow-x:hidden;padding:22px 32px 40px;scroll-padding:112px 0 20px}
+body.wide.v-stock main{right:460px;padding:0 8px 40px 240px}
+body.wide.v-stock .banner{margin-top:12px}
 body.wide .banner{max-width:900px}
 /* 分类索引 */
 body.wide .chips{position:fixed;left:32px;top:96px;width:180px;flex-direction:column;gap:0;padding:0;overflow:visible}
@@ -213,7 +215,7 @@ body.wide .chip b{display:inline;font:500 13px var(--num);color:var(--mute)}
 body.wide .chip.on{background:none;font-weight:600;color:var(--ink)}
 body.wide .chip.on span{box-shadow:inset 0 -6px 0 rgba(242,194,48,.55)}
 /* 搜索 + 工具条 */
-body.wide .searchbar{top:64px;padding:14px 0 0;background:var(--canvas);gap:16px}
+body.wide .searchbar{top:0;padding:26px 0 0;background:var(--canvas);gap:16px}
 body.wide .searchbar input{height:44px;border:0;border-bottom:1.5px solid var(--ink);border-radius:0;background:transparent;padding:0 2px;font-size:16px}
 body.wide .selbtn{height:auto;border:0;background:none;padding:0;color:var(--ink2);font-weight:500;align-self:center}
 body.wide .selbtn.on{background:none;color:var(--ink);font-weight:700}
@@ -226,7 +228,7 @@ body.wide .fab{display:none}
 .dtable{width:100%;border-collapse:collapse;table-layout:fixed}
 .dtable col.c-code{width:128px}.dtable col.c-model{width:120px}.dtable col.c-shelf{width:92px}.dtable col.c-q{width:84px}.dtable col.c-l{width:52px}.dtable col.c-ck{width:34px}
 html.wide{background:#E4E6E5}
-.dtable th{text-align:left;font-weight:500;font-size:12.5px;color:var(--mute);padding:10px 8px;border-bottom:1px solid var(--hair);white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:122px;background:var(--canvas);z-index:2}
+.dtable th{text-align:left;font-weight:500;font-size:12.5px;color:var(--mute);padding:10px 8px;border-bottom:1px solid var(--hair);white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:70px;background:var(--canvas);z-index:2}
 .dtable th.r{text-align:right}
 .dtable th.on{color:var(--ink)}
 .dtable th.on::after{content:" ↓"}.dtable th.on.asc::after{content:" ↑"}
@@ -278,10 +280,17 @@ body.wide.v-stock #pane{display:flex;flex-direction:column;position:fixed;top:80
 #pane .warnbox{margin-top:12px}
 /* 电脑端软件（无边框窗口）：顶栏可以拖动窗口，右边给 最小化/最大化/关闭 按钮留位置 */
 body.desk header.top{-webkit-app-region:drag;padding-right:150px}
-body.desk header.top button, body.desk nav.tabs{-webkit-app-region:no-drag}
-body.wide ::-webkit-scrollbar{width:8px;height:8px}
-body.wide ::-webkit-scrollbar-thumb{background:rgba(18,23,25,.18);border-radius:4px}
-body.wide ::-webkit-scrollbar-track{background:transparent}
+body.desk header.top button, body.desk header.top input, body.desk nav.tabs button{-webkit-app-region:no-drag}
+body.desk nav.tabs{-webkit-app-region:drag}
+/* 滚动条：细线、无底槽、从顶栏下方开始；鼠标移上去才变粗变深 */
+html.wide::-webkit-scrollbar, html.wide ::-webkit-scrollbar{width:12px;height:12px;background:transparent}
+html.wide::-webkit-scrollbar-track, html.wide ::-webkit-scrollbar-track{background:transparent}
+body.wide main::-webkit-scrollbar-track{margin:6px 0 10px}
+#pane::-webkit-scrollbar-track{margin:16px 0}
+html.wide::-webkit-scrollbar-thumb, html.wide ::-webkit-scrollbar-thumb{background:rgba(18,23,25,.16);border:4px solid transparent;background-clip:padding-box;border-radius:6px;min-height:40px}
+html.wide::-webkit-scrollbar-thumb:hover, html.wide ::-webkit-scrollbar-thumb:hover{background-color:rgba(18,23,25,.34);border-width:3px}
+html.wide::-webkit-scrollbar-thumb:active, html.wide ::-webkit-scrollbar-thumb:active{background-color:rgba(18,23,25,.48);border-width:3px}
+html.wide::-webkit-scrollbar-button, html.wide ::-webkit-scrollbar-button, html.wide ::-webkit-scrollbar-corner{display:none;background:transparent}
 /* 其他页面 */
 body.wide .list:not(.dtable){max-width:980px}
 body.wide .h{max-width:980px}
@@ -330,7 +339,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 g';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 h';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -599,7 +608,7 @@ function renderTabs() {
   if (!tabs.includes(S.view)) S.view = 'stock';
   $('#tabs').innerHTML = tabs.map(t => { const b = badgeFor(t); return `<button data-tab="${t}" class="${S.view === t ? 'on' : ''}">${TABN[t]}${b ? `<span class="badge">${b}</span>` : ''}</button>`; }).join('');
 }
-$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.view = b.dataset.tab; S.sel = null; scrollTo(0, 0); doRender(); });
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.view = b.dataset.tab; S.sel = null; scrollTo(0, 0); $('#main').scrollTop = 0; doRender(); });
 $('#meBtn').addEventListener('click', () => openIdentity(false));
 // 点"已同步"刷新：先检查有没有新版本，再重新加载页面（数据会重新从云端拿一遍）
 $('#sync').addEventListener('click', async () => {

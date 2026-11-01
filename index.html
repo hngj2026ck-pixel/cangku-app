@@ -159,6 +159,7 @@ nav.tabs button.on::before{content:"";position:absolute;top:0;left:28%;right:28%
 .sugg button:first-child{border-top:0}
 .card.adm{display:flex;flex-direction:column;gap:10px;padding:12px 14px;margin-bottom:8px;border:1px solid var(--line)}
 .card.adm .btns{margin:0;justify-content:flex-end}.card.adm .btns .btn{flex:none;padding:0 14px}
+.devs{margin-top:6px;border-top:1px solid var(--line)}.dev{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--mute);padding:6px 0;border-bottom:1px solid var(--line)}.dev .link{font-size:13px;color:var(--red)}
 .seg.sm{gap:6px}.seg.sm button{height:34px;padding:0 10px;font-size:13.5px}
 .warnbox{background:#FFF1C2;color:#5c4400;border-radius:8px;padding:8px 12px;font-size:14px;margin-top:8px}
 table.pv{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
@@ -348,7 +349,7 @@ const FB_VER = '10.12.2';
 // 自动化测试用：网址带 ?emu=1 时连本机的 Firebase 模拟器（只在 GitHub Actions 里用）
 const EMU = /[?&]emu=1/.test(location.search) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const LOGIN = !!FIREBASE_CONFIG || (() => { try { return localStorage.getItem('ck_login_test') === '1'; } catch (e) { return false; } })();
-const APP_VER = '2026-11-01 p1';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 p2';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -916,7 +917,7 @@ function loginChanged() {
 function openLogin(dev) {
   const waiting = dev && dev.status === 'pending', rejected = dev && dev.status === 'rejected';
   openSheet(`<div class="sh"><div><h2>${waiting ? '等待管理员同意' : '你好，请输入名字'}</h2><div class="sub" style="white-space:normal">${waiting
-      ? `「${esc(dev.name)}」已经在另一台手机上使用。已经发给管理员，同意后这台手机会自动进入，旧手机会自动退出。`
+      ? `「${esc(dev.name)}」已经在别的设备上登录过。已经发给管理员，管理员同意后这台设备会自动进入。`
       : '第一次使用只要输入名字。以后这台手机会记住你，不用再输。'}</div></div></div>
     ${rejected ? `<div class="warnbox">管理员没有同意「${esc(dev.name)}」在这台手机上使用。如果是你本人，当面跟管理员说一声再试。</div>` : ''}
     ${waiting ? `<div class="btns"><button class="btn line2" id="lgBack">换个名字</button></div>`
@@ -948,61 +949,81 @@ async function loginByName(n) {
     if (!boot) toast('你是第一个使用的人，已自动成为管理员');
     return;
   }
-  // 名字已经在别的手机上：发换手机申请
+  // 名字已经在别的设备上：发新设备申请，等管理员同意
   await DB.commitAsync([{ op: 'set', c: 'devreqs', id: my, d: { name: n, t, status: 'pending' } }]);
 }
 function openMe() {
   if (!LOGIN) return openIdentity(false);
   if (!me) return;
   openSheet(`${head(esc(me.name), `${ROLES[me.role] || me.role}${me.admin && me.role !== 'leader' ? ' · 能管人员' : ''}`)}
-    <div class="note" style="white-space:normal;line-height:1.7">这台手机已经绑定你的名字，别人知道你的名字也登不上。<br>
-    换手机：在新手机上输入名字，等管理员点「同意」，旧手机会自动退出。<br>
+    <div class="note" style="white-space:normal;line-height:1.7">这台设备已经绑定你的名字，别人知道你的名字也登不上。<br>
+    在电脑或新手机上用：输入名字，等管理员点「同意」。多一台设备就选「加一台设备」，换手机就选「退出旧设备」。<br>
     身份（库管员、设备部等）由管理员设置。</div>
     ${me.admin ? '<div class="btns"><button class="btn pri" id="goAdmin">人员管理</button></div>' : ''}`, sh => {
     const g = sh.querySelector('#goAdmin'); if (g) g.onclick = () => openAdmin();
   });
 }
 
-/* ---------- 管理员：人员 + 换手机申请 ---------- */
+/* ---------- 管理员：人员 + 新设备申请 ----------
+   一个人可以有几台设备（手机、电脑），每台设备一条 members 记录，名字相同就是同一个人 */
 const pendingDev = () => S.devreqs.filter(d => d.status === 'pending');
+function staff() {
+  const by = new Map();
+  for (const m of S.members) { const p = by.get(m.name) || { name: m.name, devs: [] }; p.devs.push(m); by.set(m.name, p); }
+  return [...by.values()].map(p => {
+    p.devs.sort((a, b) => (a.t || 0) - (b.t || 0));
+    const f = p.devs.find(d => d.id === DB.uid) || p.devs[0];
+    p.role = f.role; p.admin = p.devs.some(d => d.admin); p.t = Math.min(...p.devs.map(d => d.t || now())); p.mine = p.devs.some(d => d.id === DB.uid);
+    return p;
+  });
+}
 function openAdmin() {
   const draw = () => {
     const dv = pendingDev().sort((a, b) => b.t - a.t);
-    const ms = S.members.slice().sort((a, b) => (b.admin - a.admin) || String(a.role).localeCompare(String(b.role)) || String(a.name).localeCompare(String(b.name), 'zh'));
-    return `${dv.length ? `<div class="sec"><h3>换手机申请（${dv.length}）</h3>${dv.map(d => `<div class="card adm"><div><b>${esc(d.name)}</b><div class="sub">${fmtT(d.t)} 在一台新手机上申请使用这个名字</div></div>
-        <div class="btns"><button class="btn warn sm" data-dno="${d.id}">不同意</button><button class="btn pri sm" data-dok="${d.id}">同意</button></div></div>`).join('')}
-      <div class="note">同意后：新手机马上能用，旧手机自动退出。不认识的申请就点「不同意」。</div></div>` : ''}
-      <div class="sec"><h3>人员（${ms.length}）</h3>${ms.map(m => `<div class="card adm" data-mid="${m.id}"><div><b>${esc(m.name)}</b>${m.id === DB.uid ? ' <small class="sub">（我）</small>' : ''}${m.admin ? ' <span class="tag b">能管人员</span>' : ''}<div class="sub">加入于 ${fmtD(m.t || 0)}</div></div>
-        <div class="seg sm">${Object.entries(ROLES).map(([k, v]) => `<button data-role="${k}" class="${m.role === k ? 'on' : ''}">${v}</button>`).join('')}</div>
-        <div class="btns">${m.role === 'leader' ? '' : `<button class="btn line2 sm" data-adm="1">${m.admin ? '取消管人权限' : '也让他管人员'}</button>`}<button class="btn warn sm" data-rm="1">移除</button></div></div>`).join('')}</div>
-      <div class="note" style="white-space:normal">新人第一次进入默认是「领用人」，在这里改成库管员、设备部或管理员。「管理员」能看全部、导入导出、管人员，但不改库存。库管员也可以点「也让他管人员」。人走了点「移除」，他的手机马上退出。</div>`;
+    const ps = staff().sort((a, b) => (b.admin - a.admin) || String(a.role).localeCompare(String(b.role)) || String(a.name).localeCompare(String(b.name), 'zh'));
+    const has = n => S.members.some(m => m.name === n);
+    return `${dv.length ? `<div class="sec"><h3>新设备申请（${dv.length}）</h3>${dv.map(d => `<div class="card adm"><div><b>${esc(d.name)}</b><div class="sub">${fmtT(d.t)} 在一台新设备（手机或电脑）上申请用这个名字</div></div>
+        <div class="btns"><button class="btn warn sm" data-dno="${d.id}">不同意</button>${has(d.name) ? `<button class="btn line2 sm" data-dkick="${d.id}">同意，退出旧设备</button>` : ''}<button class="btn pri sm" data-dok="${d.id}">同意${has(d.name) ? '，加一台设备' : ''}</button></div></div>`).join('')}
+      <div class="note" style="white-space:normal">本人多一台电脑或手机：点「加一台设备」，几台都能用。换了手机（旧的丢了、坏了、不用了）：点「退出旧设备」。不认识的申请就点「不同意」。</div></div>` : ''}
+      <div class="sec"><h3>人员（${ps.length}）</h3>${ps.map(p => `<div class="card adm" data-pname="${esc(p.name)}"><div><b>${esc(p.name)}</b>${p.mine ? ' <small class="sub">（我）</small>' : ''}${p.admin ? ' <span class="tag b">能管人员</span>' : ''}
+          <div class="sub">加入于 ${fmtD(p.t)}　${p.devs.length} 台设备</div>
+          ${p.devs.length > 1 ? `<div class="devs">${p.devs.map((d, i) => `<div class="dev"><span>设备 ${i + 1}${d.id === DB.uid ? '（就是这台）' : ''}　${fmtD(d.t || 0)} 加入</span><button class="link" data-rmdev="${d.id}">退出这台</button></div>`).join('')}</div>` : ''}</div>
+        <div class="seg sm">${Object.entries(ROLES).map(([k, v]) => `<button data-role="${k}" class="${p.role === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+        <div class="btns">${p.role === 'leader' ? '' : `<button class="btn line2 sm" data-adm="1">${p.admin ? '取消管人权限' : '也让他管人员'}</button>`}<button class="btn warn sm" data-rm="1">移除</button></div></div>`).join('')}</div>
+      <div class="note" style="white-space:normal">新人第一次进入默认是「领用人」，在这里改成库管员、设备部或管理员。「管理员」能看全部、导入导出、管人员，但不改库存。库管员也可以点「也让他管人员」。人走了点「移除」，他所有设备马上退出，以前的记录都保留。</div>`;
   };
   const sh = openSheet(`${head('人员管理', '只有管理员能看到这里')}<div id="admBox">${draw()}</div>`, sh => {
     sh.addEventListener('click', async e => {
       const b = e.target.closest('button'); if (!b) return;
       try {
-        if (b.dataset.dok) await approveDev(b.dataset.dok);
+        if (b.dataset.dok) await approveDev(b.dataset.dok, false);
+        else if (b.dataset.dkick) { if (confirm('同意，并让这个人的其他设备退出？')) await approveDev(b.dataset.dkick, true); }
         else if (b.dataset.dno) await DB.commitAsync([{ op: 'upd', c: 'devreqs', id: b.dataset.dno, d: { status: 'rejected' } }]);
-        else {
-          const card = b.closest('[data-mid]'); if (!card) return;
-          const m = S.members.find(x => x.id === card.dataset.mid); if (!m) return;
-          const admins = S.members.filter(x => x.admin).length;
+        else if (b.dataset.rmdev) {
+          const d = S.members.find(x => x.id === b.dataset.rmdev); if (!d) return;
+          if (!confirm(d.id === DB.uid ? '让你现在用的这台设备退出？' : `让「${d.name}」的这台设备退出？他的其他设备还能用。`)) return;
+          const ops = [{ op: 'del', c: 'members', id: d.id }];
+          const nb = await DB.getFresh('names', d.name), rest = S.members.filter(x => x.name === d.name && x.id !== d.id);
+          if (nb && nb.uid === d.id && rest.length) ops.push({ op: 'set', c: 'names', id: d.name, d: { uid: rest[0].id, t: now() } });
+          await DB.commitAsync(ops);
+        } else {
+          const card = b.closest('[data-pname]'); if (!card) return;
+          const p = staff().find(x => x.name === card.dataset.pname); if (!p) return;
+          const admins = staff().filter(x => x.admin).length;
+          const all = d => p.devs.map(x => ({ op: 'upd', c: 'members', id: x.id, d }));
           if (b.dataset.role) {
-            if (b.dataset.role === m.role) return;
+            if (b.dataset.role === p.role) return;
             const d = { role: b.dataset.role }; if (b.dataset.role === 'leader') d.admin = true;   // 「管理员」身份自带管人权限
-            await DB.commitAsync([{ op: 'upd', c: 'members', id: m.id, d }]);
-          }
-          else if (b.dataset.adm) {
-            if (m.role === 'leader') return alert('身份是「管理员」的人一定能管人员。要取消，先把他的身份改成别的。');
-            if (m.admin && admins <= 1) return alert('至少要留一个管理员');
-            if (m.admin && m.id === DB.uid && !confirm('取消自己的管理员？取消后你就进不了这里了。')) return;
-            await DB.commitAsync([{ op: 'upd', c: 'members', id: m.id, d: { admin: !m.admin } }]);
+            await DB.commitAsync(all(d));
+          } else if (b.dataset.adm) {
+            if (p.role === 'leader') return alert('身份是「管理员」的人一定能管人员。要取消，先把他的身份改成别的。');
+            if (p.admin && admins <= 1) return alert('至少要留一个管理员');
+            if (p.admin && p.mine && !confirm('取消自己的管人权限？取消后你就进不了这里了。')) return;
+            await DB.commitAsync(all({ admin: !p.admin }));
           } else if (b.dataset.rm) {
-            if (m.admin && admins <= 1) return alert('至少要留一个管理员，先把别人设为管理员再移除');
-            if (!confirm(m.id === DB.uid ? '移除你自己？这台手机会马上退出。' : `移除「${m.name}」？他的手机会马上退出。他以前的记录都会保留。`)) return;
-            const ops = [{ op: 'del', c: 'members', id: m.id }];
-            const nb = await DB.getFresh('names', m.name); if (nb && nb.uid === m.id) ops.push({ op: 'del', c: 'names', id: m.name });
-            await DB.commitAsync(ops);
+            if (p.admin && admins <= 1) return alert('至少要留一个管理员，先把别人设为管理员再移除');
+            if (!confirm(p.mine ? '移除你自己？你所有设备会马上退出。' : `移除「${p.name}」？他所有设备会马上退出，以前的记录都保留。`)) return;
+            await DB.commitAsync([...p.devs.map(x => ({ op: 'del', c: 'members', id: x.id })), { op: 'del', c: 'names', id: p.name }]);
           }
         }
       } catch (err) { console.error(err); alert('没成功：' + (err.code || err.message || err)); }
@@ -1011,18 +1032,18 @@ function openAdmin() {
   admRedraw = () => { const box = sh.isConnected && sh.querySelector('#admBox'); if (box) box.innerHTML = draw(); else admRedraw = null; };
 }
 let admRedraw = null;
-async function approveDev(newUid) {
+// 同意新设备：kick=false 加一台（原来的设备照常用）；kick=true 换设备（原来的全部退出）
+async function approveDev(newUid, kick) {
   const d = S.devreqs.find(x => x.id === newUid); if (!d) return;
-  const bound = await DB.getFresh('names', d.name);
-  const old = bound && S.members.find(m => m.id === bound.uid);
+  const olds = S.members.filter(m => m.name === d.name && m.id !== newUid);
+  const ref = olds.find(m => m.admin) || olds[0];
   const ops = [
-    { op: 'set', c: 'names', id: d.name, d: { uid: newUid, t: now() } },
-    { op: 'set', c: 'members', id: newUid, d: { name: d.name, role: old ? old.role : 'user', admin: old ? !!old.admin : false, t: old ? (old.t || now()) : now() } },
+    { op: 'set', c: 'members', id: newUid, d: { name: d.name, role: ref ? ref.role : 'user', admin: ref ? olds.some(m => m.admin) : false, t: now() } },
     { op: 'del', c: 'devreqs', id: newUid }
   ];
-  if (old && old.id !== newUid) ops.push({ op: 'del', c: 'members', id: old.id });
+  if (kick || !olds.length) { ops.push({ op: 'set', c: 'names', id: d.name, d: { uid: newUid, t: now() } }); if (kick) olds.forEach(m => ops.push({ op: 'del', c: 'members', id: m.id })); }
   await DB.commitAsync(ops);
-  toast(`已同意，${d.name} 的新手机可以用了`);
+  toast(kick ? `已同意，${d.name} 的旧设备已退出` : `已同意，${d.name} 的新设备可以用了`);
 }
 
 // 把测试版（cangku-test）里的数据整个搬到正式库：物品、记录、借出、申报、修改记录、照片、设置
@@ -1656,7 +1677,7 @@ function viewMore() {
   const noPhoto = S.items.filter(i => !i.hasPhoto).length, k = isKeeper(), canSee = k || (me && me.role === 'leader');
   const dv = me && me.admin ? pendingDev().length : 0;
   const admin = me && me.admin ? `<div class="h"><h2>人员</h2></div><div class="menu">
-      <button data-act="admin">人员管理 <small>${dv ? `<span class="tag r">${dv} 个换手机申请</span>` : `${S.members.length} 人`}</small></button>
+      <button data-act="admin">人员管理 <small>${dv ? `<span class="tag r">${dv} 个新设备申请</span>` : `${staff().length} 人`}</small></button>
       <button data-act="importTest">从测试版导入数据</button>
     </div>` : '';
   if (!canSee) return admin + `<p class="foot">正式版　版本 ${APP_VER}</p>`;

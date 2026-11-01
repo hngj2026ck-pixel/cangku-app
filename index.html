@@ -427,7 +427,8 @@ async function makeCloud(cfg) {
   const mkBatch = ops => { const b = fs.writeBatch(db); for (const o of ops) { const ref = fs.doc(db, o.c, o.id); if (o.op === 'set') b.set(ref, conv(o.d)); else if (o.op === 'upd') b.update(ref, conv(o.d)); else b.delete(ref); } return b; };
   return {
     mode: 'cloud', uid: myUid,
-    subDoc(c, id, cb) { return fs.onSnapshot(fs.doc(db, c, id), s => cb(s.exists() ? { id: s.id, ...s.data() } : null), err => { console.warn(err); cb(null); }); },
+    // 只认服务器确认过的结果（刚登记完、还没写到服务器时不算，否则马上去读数据会被安全规则拒绝）
+    subDoc(c, id, cb) { return fs.onSnapshot(fs.doc(db, c, id), { includeMetadataChanges: true }, s => { if (s.metadata.hasPendingWrites || (s.metadata.fromCache && !s.exists())) return; cb(s.exists() ? { id: s.id, ...s.data() } : null); }, err => { console.warn(err); cb(null); }); },
     async getFresh(c, id) { const s = await fs.getDoc(fs.doc(db, c, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
     async commitAsync(ops) { await mkBatch(ops).commit(); },
     // 读另一个 Firebase 项目（测试库）的整个集合，只用来搬数据
@@ -440,9 +441,12 @@ async function makeCloud(cfg) {
     sub(c, cb, opt) {
       let q = fs.collection(db, c);
       if (opt && opt.order) q = fs.query(q, fs.orderBy(opt.order, 'desc'), fs.limit(opt.limit || 1000));
-      fs.onSnapshot(q, { includeMetadataChanges: true },
-        s => cb(s.docs.map(d => ({ id: d.id, ...d.data() })), { cache: s.metadata.fromCache, pending: s.metadata.hasPendingWrites }),
-        err => dbError(err));
+      // 被拒绝时（比如刚被管理员同意、权限还没生效）过几秒自动重试，不用用户刷新
+      let tries = 0;
+      const go = () => fs.onSnapshot(q, { includeMetadataChanges: true },
+        s => { tries = 0; if (S.err && S.err.startsWith('没有权限')) { S.err = ''; } cb(s.docs.map(d => ({ id: d.id, ...d.data() })), { cache: s.metadata.fromCache, pending: s.metadata.hasPendingWrites }); },
+        err => { if (err.code === 'permission-denied' && tries++ < 8) setTimeout(go, 1500 * tries); else dbError(err); });
+      go();
     },
     async get(c, id) {
       const ref = fs.doc(db, c, id); let s;

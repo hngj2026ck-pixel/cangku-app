@@ -241,7 +241,9 @@ html.wide{background:#E4E6E5}
 .dtable tr.sel td{background:rgba(255,255,255,.75)}
 .dtable tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--signal)}
 .dtable tr.picked td{background:#EAF1FA}
-.dtable .tn{font-weight:600;font-size:14.5px}.dtable .tn small{font-weight:400;color:var(--mute);font-size:12.5px;margin-left:10px}
+.dtable .tn{font-weight:600;font-size:14.5px;padding-left:4px}
+.dtable .tnw{display:flex;align-items:center;gap:12px;min-width:0}.dtable .tnt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.thumb.dt{width:36px;height:36px;border-radius:6px;font-size:14px;background:#D9DFDC;box-shadow:inset 0 0 0 1px rgba(18,23,25,.06)}.dtable .tn small{font-weight:400;color:var(--mute);font-size:12.5px;margin-left:10px}
 .dtable .tc{font:500 15px var(--num);letter-spacing:.5px;color:var(--ink2)}
 .dtable .tm{color:var(--mute);font-size:13px}
 .dtable .ts{font:600 15px var(--num);letter-spacing:1px}
@@ -349,7 +351,7 @@ const FB_VER = '10.12.2';
 // 自动化测试用：网址带 ?emu=1 时连本机的 Firebase 模拟器（只在 GitHub Actions 里用）
 const EMU = /[?&]emu=1/.test(location.search) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const LOGIN = !!FIREBASE_CONFIG || (() => { try { return localStorage.getItem('ck_login_test') === '1'; } catch (e) { return false; } })();
-const APP_VER = '2026-11-01 p3';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 p4';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -751,7 +753,7 @@ function deskTable(list) {
   return `<table class="dtable"><colgroup>${S.sel ? '<col class="c-ck">' : ''}<col><col class="c-code"><col class="c-model"><col class="c-shelf"><col class="c-q">${anyLent ? '<col class="c-l">' : ''}</colgroup><thead><tr>${S.sel ? '<th class="tck"></th>' : ''}${th('name', '名称 / 规格')}${th('code', '配件编号')}${th('model', '适用机型 / 分类')}${th('shelf', '货位')}${th('stock', '在库', 'r')}${anyLent ? th('lent', '借出', 'r') : ''}</tr></thead><tbody>${list.map(it => {
     const picked = S.sel && S.sel.has(it.id);
     return `<tr data-item="${it.id}" class="${it.id === S.paneId ? 'sel' : ''} ${picked ? 'picked' : ''}">${S.sel ? `<td class="tck"><span>${picked ? '✓' : ''}</span></td>` : ''}
-      <td class="tn">${esc(it.name)}${it.spec ? `<small>${esc(it.spec)}</small>` : ''}${it.badQty ? '<span class="flag">数量待核</span>' : ''}</td>
+      <td class="tn"><div class="tnw">${thumb(it, 'thumb dt')}<div class="tnt">${esc(it.name)}${it.spec ? `<small>${esc(it.spec)}</small>` : ''}${it.badQty ? '<span class="flag">数量待核</span>' : ''}</div></div></td>
       <td class="tc">${esc(it.code || '')}</td><td class="tm">${esc(it.model || it.category || '')}</td><td class="ts">${esc(it.shelf || '')}</td>
       <td class="tq ${(it.stock || 0) < 0 ? 'neg' : ''}">${fmt(it.stock)}<i>${esc(it.unit || '')}</i></td>${anyLent ? `<td class="tl">${it.returnable && it.lent ? fmt(it.lent) : ''}</td>` : ''}</tr>`;
   }).join('')}</tbody></table>`;
@@ -2170,7 +2172,7 @@ document.addEventListener('keydown', e => {
 });
 // 点照片全屏看
 document.addEventListener('click', e => {
-  if (e.target.closest('.cam') || (S.sel && e.target.closest('.row'))) return;
+  if (e.target.closest('.cam') || (S.sel && e.target.closest('.row, .dtable tr'))) return;
   const box = e.target.closest('.photo.has'); const img = e.target.closest('img[data-view]') || (box && box.querySelector('img[data-view]'));
   if (!img) return;
   const v = document.createElement('div'); v.className = 'viewer';

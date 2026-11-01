@@ -209,6 +209,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
+const APP_VER = '2026-11-01 c';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -1229,7 +1230,7 @@ function viewMore() {
       <button data-act="audit">修改和删除记录 <small>${S.audit.length} 条</small></button>
       ${DB.mode === 'local' ? '<button data-act="seed">载入示例数据</button><button data-act="wipe">清空本地数据</button>' : ''}
     </div>
-    <p class="foot">${DB.mode === 'local' ? '本地演示模式' : '已连接云端数据库'}　测试版</p>`;
+    <p class="foot">${DB.mode === 'local' ? '本地演示模式' : '已连接云端数据库'}　测试版　版本 ${APP_VER}</p>`;
 }
 function openBurst() {
   const list = S.items.filter(i => !i.hasPhoto).sort((a, b) => (b.lu || 0) - (a.lu || 0));
@@ -1632,7 +1633,9 @@ $('#main').addEventListener('click', e => {
 
 // 点照片全屏看
 document.addEventListener('click', e => {
-  const img = e.target.closest('img[data-view]'); if (!img) return;
+  if (e.target.closest('.cam')) return;
+  const box = e.target.closest('.photo.has'); const img = e.target.closest('img[data-view]') || (box && box.querySelector('img[data-view]'));
+  if (!img) return;
   const v = document.createElement('div'); v.className = 'viewer';
   v.innerHTML = `<img src="${img.src}" alt=""><button aria-label="关闭">×</button>`;
   v.onclick = () => v.remove(); document.body.appendChild(v);

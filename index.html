@@ -157,6 +157,9 @@ nav.tabs button.on::before{content:"";position:absolute;top:0;left:28%;right:28%
 .sugg{border:1px solid var(--line);border-radius:8px;margin-top:4px;overflow:hidden}
 .sugg button{display:block;width:100%;text-align:left;padding:10px 12px;border-top:1px solid var(--soft);font-size:15px}
 .sugg button:first-child{border-top:0}
+.card.adm{display:flex;flex-direction:column;gap:10px;padding:12px 14px;margin-bottom:8px;border:1px solid var(--line)}
+.card.adm .btns{margin:0;justify-content:flex-end}.card.adm .btns .btn{flex:none;padding:0 14px}
+.seg.sm{gap:6px}.seg.sm button{height:34px;padding:0 10px;font-size:13.5px}
 .warnbox{background:#FFF1C2;color:#5c4400;border-radius:8px;padding:8px 12px;font-size:14px;margin-top:8px}
 table.pv{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
 table.pv th,table.pv td{border-bottom:1px solid var(--soft);padding:6px 4px;text-align:left}
@@ -331,15 +334,19 @@ body.wide:not(.v-stock) .selbar,body.wide:not(.v-stock) .cartbar{right:32px}
    为 null 时是“本地演示模式”：数据只存在这部手机。
    ========================================================= */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDXR5i3jt2N0pEDCPqtqco6nh7E9AEIDs4",
-  authDomain: "cangku-test-ca767.firebaseapp.com",
-  projectId: "cangku-test-ca767",
-  storageBucket: "cangku-test-ca767.firebasestorage.app",
-  messagingSenderId: "204511919854",
-  appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
+  apiKey: "AIzaSyAtMHOOBzuwAOTdwl7lsOrvK2VIfg-D2lk",
+  authDomain: "cangku-prod.firebaseapp.com",
+  projectId: "cangku-prod",
+  storageBucket: "cangku-prod.firebasestorage.app",
+  messagingSenderId: "734668318431",
+  appId: "1:734668318431:web:78570eb9d7785086472b6a"
 };
+// 正式版的测试库（只用来把旧数据导进正式库，测试库约 2026-11-23 到期）
+const TEST_CONFIG = { apiKey: "AIzaSyDXR5i3jt2N0pEDCPqtqco6nh7E9AEIDs4", authDomain: "cangku-test-ca767.firebaseapp.com", projectId: "cangku-test-ca767", storageBucket: "cangku-test-ca767.firebasestorage.app", messagingSenderId: "204511919854", appId: "1:204511919854:web:f3e1360f46c62fddf33dff" };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 j';  // 每次改代码时改这里，用来确认手机上是不是新版
+// 正式版：名字登录（每台手机绑定一个名字，换手机要管理员同意）。本地演示时可在控制台 localStorage.ck_login_test='1' 来测试
+const LOGIN = !!FIREBASE_CONFIG || (() => { try { return localStorage.getItem('ck_login_test') === '1'; } catch (e) { return false; } })();
+const APP_VER = '2026-11-01 p1';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -372,10 +379,15 @@ function makeLocal() {
     if (opt && opt.order) { a.sort((x, y) => (y[opt.order] || 0) - (x[opt.order] || 0)); if (opt.limit) a = a.slice(0, opt.limit); }
     return a;
   };
-  const emit = () => subs.forEach(s => s.cb(list(s.c, s.opt), { cache: false, pending: false }));
+  const emit = () => subs.forEach(s => s.cb(list(s.c, s.opt), { cache: false, pending: false }));  // subDoc 的 cb 忽略参数，自己取单条
+  let luid = localStorage.getItem('ck_uid'); if (!luid) { luid = 'L' + uid(); localStorage.setItem('ck_uid', luid); }
+  const one = (c, id) => { const d = data[c] && data[c][id]; return d ? { id, ...JSON.parse(JSON.stringify(d)) } : null; };
   return {
-    mode: 'local',
+    mode: 'local', uid: luid,
     sub(c, cb, opt) { subs.push({ c, cb, opt }); setTimeout(() => cb(list(c, opt), { cache: false, pending: false })); },
+    subDoc(c, id, cb) { const s = { c, cb: () => cb(one(c, id)) }; subs.push(s); setTimeout(() => cb(one(c, id))); },
+    async getFresh(c, id) { return one(c, id); },
+    async commitAsync(ops) { this.commit(ops); },
     async get(c, id) { const d = data[c] && data[c][id]; return d ? { id, ...JSON.parse(JSON.stringify(d)) } : null; },
     commit(ops) {
       for (const o of ops) {
@@ -394,14 +406,26 @@ function makeLocal() {
 
 async function makeCloud(cfg) {
   const base = `https://www.gstatic.com/firebasejs/${FB_VER}/`;
-  const [{ initializeApp }, fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-firestore.js')]);
+  const [{ initializeApp }, fs, au] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-firestore.js'), LOGIN ? import(base + 'firebase-auth.js') : null]);
   const app = initializeApp(cfg);
+  // 正式版：每台手机自动拿一个看不见的匿名编号（uid），用户本人什么都不用做
+  let myUid = null;
+  if (LOGIN) {
+    const auth = au.getAuth(app);
+    myUid = await new Promise((res, rej) => {
+      const off = au.onAuthStateChanged(auth, u => { if (u) { off(); res(u.uid); } else au.signInAnonymously(auth).catch(rej); }, rej);
+    });
+  }
   let db;
   try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
   catch (e) { console.warn(e); db = fs.getFirestore(app); }
   const conv = d => { const r = {}; for (const k in d) { const v = d[k]; r[k] = (v && typeof v === 'object' && '__inc' in v) ? fs.increment(v.__inc) : v; } return r; };
+  const mkBatch = ops => { const b = fs.writeBatch(db); for (const o of ops) { const ref = fs.doc(db, o.c, o.id); if (o.op === 'set') b.set(ref, conv(o.d)); else if (o.op === 'upd') b.update(ref, conv(o.d)); else b.delete(ref); } return b; };
   return {
-    mode: 'cloud',
+    mode: 'cloud', uid: myUid,
+    subDoc(c, id, cb) { return fs.onSnapshot(fs.doc(db, c, id), s => cb(s.exists() ? { id: s.id, ...s.data() } : null), err => { console.warn(err); cb(null); }); },
+    async getFresh(c, id) { const s = await fs.getDoc(fs.doc(db, c, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
+    async commitAsync(ops) { await mkBatch(ops).commit(); },
     sub(c, cb, opt) {
       let q = fs.collection(db, c);
       if (opt && opt.order) q = fs.query(q, fs.orderBy(opt.order, 'desc'), fs.limit(opt.limit || 1000));
@@ -429,17 +453,19 @@ async function makeCloud(cfg) {
 let DB;
 
 /* ---------- 状态 ---------- */
-const ROLES = { keeper: '库管员', user: '领用人', buyer: '设备部', viewer: '查看者' };
+const ROLES = { keeper: '库管员', user: '领用人', buyer: '设备部', leader: '管理员', viewer: '查看者' };
 const S = {
   items: [], all: [], byId: new Map(), lends: [], reqs: [], recs: [], audit: [], settings: { returnCats: [] },
-  view: 'stock', cat: '全部', q: '', lendSort: 'time',
+  view: 'stock', cat: '全部', q: '', lendSort: 'time', members: [], devreqs: [],
   sync: { cache: true, pending: false, last: null }, err: '', dirty: false
 };
-let me = null; try { me = JSON.parse(localStorage.getItem('ck_me')); } catch (e) {}
+let me = null; if (!LOGIN) try { me = JSON.parse(localStorage.getItem('ck_me')); } catch (e) {}
 let cart = []; try { cart = JSON.parse(localStorage.getItem('ck_cart')) || []; } catch (e) {}
 const saveCart = () => { try { localStorage.setItem('ck_cart', JSON.stringify(cart)); } catch (e) {} };
 // 能管库存（入库/出库/借出/编辑/导入/记录）：库管员和采购（设备部）都可以
 const isKeeper = () => me && (me.role === 'keeper' || me.role === 'buyer');
+// 能导入表格：库管员、设备部、管理员（管理员只看库存不改，但能导入导出、管人）
+const canImport = () => isKeeper() || (me && me.role === 'leader');
 const item = id => S.byId.get(id);
 
 /* ---------- 写入：所有改库存的动作都在这里 ---------- */
@@ -518,7 +544,7 @@ function editRecordQty(r, nq) {
 /* ---------- 启动 ---------- */
 function dbError(e) {
   console.error(e);
-  if (e && e.code === 'permission-denied') S.err = '数据库拒绝访问：测试模式可能已经到期（30 天），需要在 Firebase 后台更新规则。';
+  if (e && e.code === 'permission-denied') S.err = LOGIN ? '没有权限：这台手机的身份可能已被管理员移除，或名字换到了别的手机。点「已同步」刷新一下。' : '数据库拒绝访问：测试模式可能已经到期（30 天），需要在 Firebase 后台更新规则。';
   else S.err = '同步出错：' + (e && e.message || e);
   render();
 }
@@ -528,6 +554,14 @@ async function boot() {
     $('#main').innerHTML = `<div class="banner err">连不上数据库，检查网络后刷新页面。（${esc(e.message)}）</div>`;
     return;
   }
+  if (LOGIN) { startLogin(); render(); return; }
+  startData();
+  if (!me) openIdentity(true);
+  render();
+}
+let dataOn = false;
+function startData() {
+  if (dataOn) return; dataOn = true;
   DB.sub('items', (a, m) => {
     S.all = a; S.items = a.filter(x => !x.deleted); S.byId = new Map(a.map(x => [x.id, x]));
     S.sync.cache = m.cache; S.sync.pending = m.pending; if (!m.cache) S.sync.last = now();
@@ -538,8 +572,6 @@ async function boot() {
   DB.sub('records', a => { S.recs = a; render(); }, { order: 't', limit: 1000 });
   DB.sub('audit', a => { S.audit = a; render(); }, { order: 't', limit: 200 });
   DB.sub('meta', a => { const s = a.find(x => x.id === 'settings'); S.settings = { returnCats: [], ...(s || {}) }; render(); });
-  if (!me) openIdentity(true);
-  render();
 }
 addEventListener('online', () => render());
 addEventListener('offline', () => render());
@@ -548,7 +580,7 @@ addEventListener('offline', () => render());
 let rq = false;
 function render() { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; doRender(); }); }
 function doRender() {
-  renderTop(); renderTabs(); renderLists(); if (DESK) deskTick();
+  renderTop(); if (LOGIN && !me) return; renderTabs(); renderLists(); if (DESK) deskTick(); if (admRedraw) admRedraw();
   document.body.classList.toggle('v-stock', S.view === 'stock');
   const main = $('#main'); const ae = document.activeElement;
   if (S.view !== 'stock' && ae && main.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) { S.dirty = true; renderFloat(); return; }
@@ -584,7 +616,7 @@ function renderTop() {
   else if (S.sync.cache) { txt = '连接中…'; }
   else { cls = 'ok'; txt = '已同步'; }
   el.className = 'sync ' + cls; el.querySelector('span').textContent = txt;
-  $('#meBtn').textContent = me ? `${me.name}（${ROLES[me.role]}）` : '选择身份';
+  $('#meBtn').textContent = me ? `${me.name}（${ROLES[me.role] || me.role}）` : (LOGIN ? '未登录' : '选择身份');
 }
 function banners() {
   let h = '';
@@ -593,12 +625,14 @@ function banners() {
   return h;
 }
 function tabsFor(r) {
-  return r === 'keeper' || r === 'buyer' ? ['stock', 'req', 'lend', 'rec', 'more']
-    : r === 'user' ? ['stock', 'req', 'lend']
-    : r === 'buyer' ? ['stock', 'req'] : ['stock', 'lend'];
+  const t = r === 'keeper' || r === 'buyer' || r === 'leader' ? ['stock', 'req', 'lend', 'rec', 'more']
+    : r === 'user' ? ['stock', 'req', 'lend'] : ['stock', 'lend'];
+  if (me && me.admin && !t.includes('more')) t.push('more');   // 管理员总能进「更多」里的人员管理
+  return t;
 }
 const TABN = { stock: '库存', req: '申报', lend: '借出', rec: '记录', more: '更多' };
 function badgeFor(t) {
+  if (t === 'more' && me && me.admin) return pendingDev().length;
   if (t !== 'req' || !me) return 0;
   if (me.role === 'keeper') return S.reqs.filter(r => r.kind === 'use' && r.status === 'pending').length;
   if (me.role === 'buyer') return S.reqs.filter(r => r.kind === 'buy' && ['pending', 'ordered', 'partial'].includes(r.status)).length;
@@ -610,7 +644,7 @@ function renderTabs() {
   $('#tabs').innerHTML = tabs.map(t => { const b = badgeFor(t); return `<button data-tab="${t}" class="${S.view === t ? 'on' : ''}">${TABN[t]}${b ? `<span class="badge">${b}</span>` : ''}</button>`; }).join('');
 }
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.view = b.dataset.tab; S.sel = null; scrollTo(0, 0); $('#main').scrollTop = 0; doRender(); });
-$('#meBtn').addEventListener('click', () => openIdentity(false));
+$('#meBtn').addEventListener('click', () => openMe());
 // 点"已同步"刷新：先检查有没有新版本，再重新加载页面（数据会重新从云端拿一遍）
 $('#sync').addEventListener('click', async () => {
   const el = $('#sync'); el.classList.add('spin'); el.querySelector('span').textContent = '正在刷新…';
@@ -638,7 +672,7 @@ function stockShell() {
   return `<div id="stockShell"><div id="bannerBox"></div>
     <div class="searchbar"><input id="q" type="search" enterkeyhint="search" placeholder="搜名称、配件编号、货位" value="${esc(S.q)}" autocomplete="off">${isKeeper() ? `<button class="selbtn ${S.sel ? 'on' : ''}" id="selBtn">${S.sel ? '取消' : '选择'}</button>` : ''}</div>
     <div class="chips" id="chips"></div>
-    <div class="dmeta"><span id="dcount"></span><div class="dacts">${isKeeper() ? '<button data-act="import">导入</button><button data-act="expStock">导出</button><button data-act="newItem" class="add">＋ 新物品</button>' : '<button data-act="expStock">导出</button>'}</div></div>
+    <div class="dmeta"><span id="dcount"></span><div class="dacts">${isKeeper() ? '<button data-act="import">导入</button><button data-act="expStock">导出</button><button data-act="newItem" class="add">＋ 新物品</button>' : canImport() ? '<button data-act="import">导入</button><button data-act="expStock">导出</button>' : '<button data-act="expStock">导出</button>'}</div></div>
     <div id="itemList"></div></div>`;
 }
 function bindStock() {
@@ -837,6 +871,146 @@ function openIdentity(first) {
   }, first);
 }
 
+/* ---------- 正式版登录：名字 + 本机编号 ----------
+   members/{uid}  这台手机是谁：{name, role, admin, t}
+   names/{name}   这个名字绑在哪台手机：{uid, t}（保证一个名字只在一台手机上）
+   devreqs/{uid}  新手机想用某个名字，等管理员同意：{name, t, status:'pending'|'rejected'}
+   meta/boot      第一个登录的人自动成为管理员（之后就不再有这个机会）            */
+const nameKey = n => String(n || '').trim().replace(/\s+/g, ' ').replace(/\//g, '／').slice(0, 20);
+let loginState = { member: undefined, dev: undefined }, hadMember = false, adminOn = false;
+function startLogin() {
+  DB.subDoc('members', DB.uid, m => { loginState.member = m; loginChanged(); });
+  DB.subDoc('devreqs', DB.uid, d => { loginState.dev = d; loginChanged(); });
+}
+function loginChanged() {
+  const { member, dev } = loginState;
+  if (member === undefined) return;               // 还没读到
+  if (member) {
+    const was = me && JSON.stringify(me);
+    me = { name: member.name, role: member.role || 'user', admin: !!member.admin };
+    if (!hadMember) { hadMember = true; closeSheet(); startData(); }
+    if (me.admin && !adminOn) { adminOn = true; DB.sub('members', a => { S.members = a; render(); }); DB.sub('devreqs', a => { S.devreqs = a; render(); }); }
+    if (was !== JSON.stringify(me)) { S.sel = null; if (!tabsFor(me.role).includes(S.view)) S.view = 'stock'; $('#main').innerHTML = ''; }
+    render(); return;
+  }
+  // 这台手机没有身份（第一次用，或者被管理员移除 / 名字换到了别的手机）
+  if (hadMember) { location.reload(); return; }
+  if (dev === undefined) return;
+  openLogin(dev);
+}
+function openLogin(dev) {
+  const waiting = dev && dev.status === 'pending', rejected = dev && dev.status === 'rejected';
+  openSheet(`<div class="sh"><div><h2>${waiting ? '等待管理员同意' : '你好，请输入名字'}</h2><div class="sub" style="white-space:normal">${waiting
+      ? `「${esc(dev.name)}」已经在另一台手机上使用。已经发给管理员，同意后这台手机会自动进入，旧手机会自动退出。`
+      : '第一次使用只要输入名字。以后这台手机会记住你，不用再输。'}</div></div></div>
+    ${rejected ? `<div class="warnbox">管理员没有同意「${esc(dev.name)}」在这台手机上使用。如果是你本人，当面跟管理员说一声再试。</div>` : ''}
+    ${waiting ? `<div class="btns"><button class="btn line2" id="lgBack">换个名字</button></div>`
+      : `<div class="field"><label>名字</label><input id="lgName" maxlength="20" placeholder="比如：张三" autocomplete="name" value="${esc(dev ? dev.name : '')}"></div>
+    <div class="note" id="lgMsg" style="min-height:1.4em"></div>
+    <div class="btns"><button class="btn pri" id="lgOk">进入</button></div>`}`, sh => {
+    const back = sh.querySelector('#lgBack');
+    if (back) back.onclick = () => openLogin(null);
+    const ok = sh.querySelector('#lgOk'); if (!ok) return;
+    const inp = sh.querySelector('#lgName'), msg = sh.querySelector('#lgMsg');
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); });
+    ok.onclick = async () => {
+      const n = nameKey(inp.value); if (!n) { msg.textContent = '请填写名字'; return; }
+      ok.disabled = true; msg.textContent = '正在确认…';
+      try { await loginByName(n); msg.textContent = '好了，正在进入…'; }
+      catch (e) { console.error(e); ok.disabled = false; msg.textContent = navigator.onLine ? '没成功，再点一次试试（' + (e.code || e.message || e) + '）' : '第一次进入需要联网，连上网再试'; }
+    };
+  }, true);
+}
+async function loginByName(n) {
+  const t = now(), my = DB.uid;
+  const bound = await DB.getFresh('names', n);
+  if (!bound) {
+    const boot = await DB.getFresh('meta', 'boot');
+    const ops = [{ op: 'set', c: 'names', id: n, d: { uid: my, t } },
+                 { op: 'set', c: 'members', id: my, d: { name: n, role: boot ? 'user' : 'leader', admin: !boot, t } }];
+    if (!boot) ops.push({ op: 'set', c: 'meta', id: 'boot', d: { uid: my, t } });   // 第一个人：管理员
+    await DB.commitAsync(ops);
+    if (!boot) toast('你是第一个使用的人，已自动成为管理员');
+    return;
+  }
+  // 名字已经在别的手机上：发换手机申请
+  await DB.commitAsync([{ op: 'set', c: 'devreqs', id: my, d: { name: n, t, status: 'pending' } }]);
+}
+function openMe() {
+  if (!LOGIN) return openIdentity(false);
+  if (!me) return;
+  openSheet(`${head(esc(me.name), `${ROLES[me.role] || me.role}${me.admin && me.role !== 'leader' ? ' · 能管人员' : ''}`)}
+    <div class="note" style="white-space:normal;line-height:1.7">这台手机已经绑定你的名字，别人知道你的名字也登不上。<br>
+    换手机：在新手机上输入名字，等管理员点「同意」，旧手机会自动退出。<br>
+    身份（库管员、设备部等）由管理员设置。</div>
+    ${me.admin ? '<div class="btns"><button class="btn pri" id="goAdmin">人员管理</button></div>' : ''}`, sh => {
+    const g = sh.querySelector('#goAdmin'); if (g) g.onclick = () => openAdmin();
+  });
+}
+
+/* ---------- 管理员：人员 + 换手机申请 ---------- */
+const pendingDev = () => S.devreqs.filter(d => d.status === 'pending');
+function openAdmin() {
+  const draw = () => {
+    const dv = pendingDev().sort((a, b) => b.t - a.t);
+    const ms = S.members.slice().sort((a, b) => (b.admin - a.admin) || String(a.role).localeCompare(String(b.role)) || String(a.name).localeCompare(String(b.name), 'zh'));
+    return `${dv.length ? `<div class="sec"><h3>换手机申请（${dv.length}）</h3>${dv.map(d => `<div class="card adm"><div><b>${esc(d.name)}</b><div class="sub">${fmtT(d.t)} 在一台新手机上申请使用这个名字</div></div>
+        <div class="btns"><button class="btn warn sm" data-dno="${d.id}">不同意</button><button class="btn pri sm" data-dok="${d.id}">同意</button></div></div>`).join('')}
+      <div class="note">同意后：新手机马上能用，旧手机自动退出。不认识的申请就点「不同意」。</div></div>` : ''}
+      <div class="sec"><h3>人员（${ms.length}）</h3>${ms.map(m => `<div class="card adm" data-mid="${m.id}"><div><b>${esc(m.name)}</b>${m.id === DB.uid ? ' <small class="sub">（我）</small>' : ''}${m.admin ? ' <span class="tag b">能管人员</span>' : ''}<div class="sub">加入于 ${fmtD(m.t || 0)}</div></div>
+        <div class="seg sm">${Object.entries(ROLES).map(([k, v]) => `<button data-role="${k}" class="${m.role === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+        <div class="btns">${m.role === 'leader' ? '' : `<button class="btn line2 sm" data-adm="1">${m.admin ? '取消管人权限' : '也让他管人员'}</button>`}<button class="btn warn sm" data-rm="1">移除</button></div></div>`).join('')}</div>
+      <div class="note" style="white-space:normal">新人第一次进入默认是「领用人」，在这里改成库管员、设备部或管理员。「管理员」能看全部、导入导出、管人员，但不改库存。库管员也可以点「也让他管人员」。人走了点「移除」，他的手机马上退出。</div>`;
+  };
+  const sh = openSheet(`${head('人员管理', '只有管理员能看到这里')}<div id="admBox">${draw()}</div>`, sh => {
+    sh.addEventListener('click', async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      try {
+        if (b.dataset.dok) await approveDev(b.dataset.dok);
+        else if (b.dataset.dno) await DB.commitAsync([{ op: 'upd', c: 'devreqs', id: b.dataset.dno, d: { status: 'rejected' } }]);
+        else {
+          const card = b.closest('[data-mid]'); if (!card) return;
+          const m = S.members.find(x => x.id === card.dataset.mid); if (!m) return;
+          const admins = S.members.filter(x => x.admin).length;
+          if (b.dataset.role) {
+            if (b.dataset.role === m.role) return;
+            const d = { role: b.dataset.role }; if (b.dataset.role === 'leader') d.admin = true;   // 「管理员」身份自带管人权限
+            await DB.commitAsync([{ op: 'upd', c: 'members', id: m.id, d }]);
+          }
+          else if (b.dataset.adm) {
+            if (m.role === 'leader') return alert('身份是「管理员」的人一定能管人员。要取消，先把他的身份改成别的。');
+            if (m.admin && admins <= 1) return alert('至少要留一个管理员');
+            if (m.admin && m.id === DB.uid && !confirm('取消自己的管理员？取消后你就进不了这里了。')) return;
+            await DB.commitAsync([{ op: 'upd', c: 'members', id: m.id, d: { admin: !m.admin } }]);
+          } else if (b.dataset.rm) {
+            if (m.admin && admins <= 1) return alert('至少要留一个管理员，先把别人设为管理员再移除');
+            if (!confirm(m.id === DB.uid ? '移除你自己？这台手机会马上退出。' : `移除「${m.name}」？他的手机会马上退出。他以前的记录都会保留。`)) return;
+            const ops = [{ op: 'del', c: 'members', id: m.id }];
+            const nb = await DB.getFresh('names', m.name); if (nb && nb.uid === m.id) ops.push({ op: 'del', c: 'names', id: m.name });
+            await DB.commitAsync(ops);
+          }
+        }
+      } catch (err) { console.error(err); alert('没成功：' + (err.code || err.message || err)); }
+    });
+  });
+  admRedraw = () => { const box = sh.isConnected && sh.querySelector('#admBox'); if (box) box.innerHTML = draw(); else admRedraw = null; };
+}
+let admRedraw = null;
+async function approveDev(newUid) {
+  const d = S.devreqs.find(x => x.id === newUid); if (!d) return;
+  const bound = await DB.getFresh('names', d.name);
+  const old = bound && S.members.find(m => m.id === bound.uid);
+  const ops = [
+    { op: 'set', c: 'names', id: d.name, d: { uid: newUid, t: now() } },
+    { op: 'set', c: 'members', id: newUid, d: { name: d.name, role: old ? old.role : 'user', admin: old ? !!old.admin : false, t: old ? (old.t || now()) : now() } },
+    { op: 'del', c: 'devreqs', id: newUid }
+  ];
+  if (old && old.id !== newUid) ops.push({ op: 'del', c: 'members', id: old.id });
+  await DB.commitAsync(ops);
+  toast(`已同意，${d.name} 的新手机可以用了`);
+}
+
+function openImportTest() { alert('导入工具还在做'); }
 /* ---------- 物品详情 ---------- */
 function openItem(id) {
   const it = item(id); if (!it) return;
@@ -1102,6 +1276,11 @@ function viewReq() {
       <div class="rb"><div class="h"><h2>待处理领用（${pend.length}）</h2></div>
       ${pend.length ? pend.map(r => useCard(r, false)).join('') : '<div class="card empty" style="padding:20px">没有待处理的领用申报</div>'}</div>
       <div class="rc">${done.length ? `<div class="h"><h2>已处理的领用</h2></div>${done.map(r => useCard(r, false)).join('')}` : ''}</div></div>`;
+  }
+  if (role === 'leader') {
+    const buys = S.reqs.filter(r => r.kind === 'buy').slice(0, 40), uses = S.reqs.filter(r => r.kind === 'use').slice(0, 40);
+    return `<div class="reqgrid"><div class="ra"><div class="h"><h2>领用申报</h2></div>${uses.length ? uses.map(r => useCard(r, false)).join('') : '<div class="card empty" style="padding:20px">还没有领用申报</div>'}</div>
+      <div class="rb"><div class="h"><h2>采购申报</h2></div>${buys.length ? buys.map(r => buyCard(r, '')).join('') : '<div class="card empty" style="padding:20px">还没有采购申报</div>'}</div></div>`;
   }
   // 领用人
   const mine = S.reqs.filter(r => r.kind === 'use' && r.requester === me.name);
@@ -1424,14 +1603,20 @@ function openRecord(r) {
 
 /* ---------- 更多 ---------- */
 function viewMore() {
-  const noPhoto = S.items.filter(i => !i.hasPhoto).length;
-  return `<div class="h"><h2>物品</h2></div><div class="menu">
+  const noPhoto = S.items.filter(i => !i.hasPhoto).length, k = isKeeper(), canSee = k || (me && me.role === 'leader');
+  const dv = me && me.admin ? pendingDev().length : 0;
+  const admin = me && me.admin ? `<div class="h"><h2>人员</h2></div><div class="menu">
+      <button data-act="admin">人员管理 <small>${dv ? `<span class="tag r">${dv} 个换手机申请</span>` : `${S.members.length} 人`}</small></button>
+      <button data-act="importTest">从测试版导入数据</button>
+    </div>` : '';
+  if (!canSee) return admin + `<p class="foot">正式版　版本 ${APP_VER}</p>`;
+  return admin + (k ? `<div class="h"><h2>物品</h2></div><div class="menu">
       <button data-act="newItem">新建物品</button>
       <button data-act="burst">连拍补照片 <small>${noPhoto} 样没有照片</small></button>
       <button data-act="retCats">按分类设置"需归还"</button>
-    </div>
+    </div>` : '') + `
     <div class="h"><h2>表格（WPS / Excel）</h2></div><div class="menu">
-      <button data-act="import">导入物品清单</button>
+      ${canImport() ? '<button data-act="import">导入物品清单</button>' : ''}
       <button data-act="expStock">导出库存</button>
       <button data-act="expRec">导出出入库记录</button>
       <button data-act="expReq">导出申报</button>
@@ -1442,7 +1627,7 @@ function viewMore() {
       <button data-act="audit">修改和删除记录 <small>${S.audit.length} 条</small></button>
       ${DB.mode === 'local' ? '<button data-act="seed">载入示例数据</button><button data-act="wipe">清空本地数据</button>' : ''}
     </div>
-    <p class="foot">${DB.mode === 'local' ? '本地演示模式' : '已连接云端数据库'}　测试版　版本 ${APP_VER}</p>`;
+    <p class="foot">${DB.mode === 'local' ? '本地演示模式' : '已连接云端数据库'}　${LOGIN ? '正式版' : '测试版'}　版本 ${APP_VER}</p>`;
 }
 function openBurst() {
   const list = S.items.filter(i => !i.hasPhoto).sort((a, b) => (b.lu || 0) - (a.lu || 0));
@@ -1839,6 +2024,8 @@ function seed() {
 
 /* ---------- 按钮动作 ---------- */
 const ACT = {
+  admin: () => openAdmin(),
+  importTest: () => openImportTest(),
   newItem: () => openItemForm(null, { category: curCat() }),
   newItemQ: () => openItemForm(null, { name: S.q.trim(), category: curCat() }),
   selCat: () => { if (S.sel && S.sel.size) openMoveCat([...S.sel]); },

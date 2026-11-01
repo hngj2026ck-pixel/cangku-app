@@ -345,6 +345,8 @@ const FIREBASE_CONFIG = {
 const TEST_CONFIG = { apiKey: "AIzaSyDXR5i3jt2N0pEDCPqtqco6nh7E9AEIDs4", authDomain: "cangku-test-ca767.firebaseapp.com", projectId: "cangku-test-ca767", storageBucket: "cangku-test-ca767.firebasestorage.app", messagingSenderId: "204511919854", appId: "1:204511919854:web:f3e1360f46c62fddf33dff" };
 const FB_VER = '10.12.2';
 // 正式版：名字登录（每台手机绑定一个名字，换手机要管理员同意）。本地演示时可在控制台 localStorage.ck_login_test='1' 来测试
+// 自动化测试用：网址带 ?emu=1 时连本机的 Firebase 模拟器（只在 GitHub Actions 里用）
+const EMU = /[?&]emu=1/.test(location.search) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const LOGIN = !!FIREBASE_CONFIG || (() => { try { return localStorage.getItem('ck_login_test') === '1'; } catch (e) { return false; } })();
 const APP_VER = '2026-11-01 p1';  // 每次改代码时改这里，用来确认手机上是不是新版
 
@@ -412,6 +414,7 @@ async function makeCloud(cfg) {
   let myUid = null;
   if (LOGIN) {
     const auth = au.getAuth(app);
+    if (EMU) au.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
     myUid = await new Promise((res, rej) => {
       const off = au.onAuthStateChanged(auth, u => { if (u) { off(); res(u.uid); } else au.signInAnonymously(auth).catch(rej); }, rej);
     });
@@ -419,6 +422,7 @@ async function makeCloud(cfg) {
   let db;
   try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
   catch (e) { console.warn(e); db = fs.getFirestore(app); }
+  if (EMU) fs.connectFirestoreEmulator(db, '127.0.0.1', 8080);
   const conv = d => { const r = {}; for (const k in d) { const v = d[k]; r[k] = (v && typeof v === 'object' && '__inc' in v) ? fs.increment(v.__inc) : v; } return r; };
   const mkBatch = ops => { const b = fs.writeBatch(db); for (const o of ops) { const ref = fs.doc(db, o.c, o.id); if (o.op === 'set') b.set(ref, conv(o.d)); else if (o.op === 'upd') b.update(ref, conv(o.d)); else b.delete(ref); } return b; };
   return {
@@ -426,6 +430,13 @@ async function makeCloud(cfg) {
     subDoc(c, id, cb) { return fs.onSnapshot(fs.doc(db, c, id), s => cb(s.exists() ? { id: s.id, ...s.data() } : null), err => { console.warn(err); cb(null); }); },
     async getFresh(c, id) { const s = await fs.getDoc(fs.doc(db, c, id)); return s.exists() ? { id: s.id, ...s.data() } : null; },
     async commitAsync(ops) { await mkBatch(ops).commit(); },
+    // 读另一个 Firebase 项目（测试库）的整个集合，只用来搬数据
+    async readOther(cfg2, c) {
+      const app2 = (this._o || (this._o = {}))[cfg2.projectId] || (this._o[cfg2.projectId] = initializeApp(cfg2, 'other-' + cfg2.projectId));
+      const db2 = fs.getFirestore(app2);
+      const s = await fs.getDocsFromServer(fs.collection(db2, c));
+      return s.docs.map(d => ({ id: d.id, d: d.data() }));
+    },
     sub(c, cb, opt) {
       let q = fs.collection(db, c);
       if (opt && opt.order) q = fs.query(q, fs.orderBy(opt.order, 'desc'), fs.limit(opt.limit || 1000));
@@ -1010,7 +1021,42 @@ async function approveDev(newUid) {
   toast(`已同意，${d.name} 的新手机可以用了`);
 }
 
-function openImportTest() { alert('导入工具还在做'); }
+// 把测试版（cangku-test）里的数据整个搬到正式库：物品、记录、借出、申报、修改记录、照片、设置
+// 用原来的编号写入，所以点两次也不会重复
+async function openImportTest() {
+  if (!DB.readOther) return alert('本地演示模式不能导入');
+  const COLS = [['items', '物品'], ['records', '出入库记录'], ['lends', '借出'], ['requests', '申报'], ['audit', '修改和删除记录'], ['photos', '照片'], ['meta', '设置']];
+  const sh = openSheet(`${head('从测试版导入数据', '把测试版里的物品、记录、申报、借出、照片全部搬到正式版。')}
+    <div class="note" style="white-space:normal;line-height:1.7">· 测试版的数据不会被删，导完还在。<br>· 用原来的编号写入，点两次也不会重复。<br>· 导入时手机别锁屏、保持联网，照片多的话要几分钟。<br>· 测试版大约 11 月 23 日到期，要在那之前导。</div>
+    ${S.items.length ? `<div class="warnbox">正式版里已经有 ${S.items.length} 样物品。导入会和现有的合并，编号相同的以测试版为准。</div>` : ''}
+    <div id="impLog" class="mini" style="margin-top:12px;white-space:pre-line;line-height:1.8"></div>
+    <div class="btns"><button class="btn pri" id="impGo">开始导入</button></div>`, sh => {
+    const log = sh.querySelector('#impLog'), go = sh.querySelector('#impGo');
+    go.onclick = async () => {
+      go.disabled = true; go.textContent = '正在导入…';
+      const lines = []; const put = (i, t) => { lines[i] = t; log.textContent = lines.join('\n'); };
+      try {
+        let total = 0;
+        for (let i = 0; i < COLS.length; i++) {
+          const [c, label] = COLS[i];
+          put(i, `${label}：读取中…`);
+          const docs = await DB.readOther(TEST_CONFIG, c);
+          const list = c === 'meta' ? docs.filter(x => x.id !== 'boot') : docs;
+          const step = c === 'photos' ? 8 : 300;          // 照片大，一次少写几张
+          for (let j = 0; j < list.length; j += step) {
+            await DB.commitAsync(list.slice(j, j + step).map(x => ({ op: 'set', c, id: x.id, d: x.d })));
+            put(i, `${label}：${Math.min(j + step, list.length)} / ${list.length}`);
+          }
+          put(i, `${label}：${list.length} 条 ✓`); total += list.length;
+        }
+        go.textContent = '导入完成'; toast('导入完成');
+      } catch (e) {
+        console.error(e); go.disabled = false; go.textContent = '再试一次';
+        lines.push('出错了：' + (e.code === 'permission-denied' ? '测试版可能已经到期，读不到了' : (e.code || e.message || e))); log.textContent = lines.join('\n');
+      }
+    };
+  });
+}
 /* ---------- 物品详情 ---------- */
 function openItem(id) {
   const it = item(id); if (!it) return;

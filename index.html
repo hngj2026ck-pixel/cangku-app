@@ -339,7 +339,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 h';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 i';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -438,7 +438,8 @@ const S = {
 let me = null; try { me = JSON.parse(localStorage.getItem('ck_me')); } catch (e) {}
 let cart = []; try { cart = JSON.parse(localStorage.getItem('ck_cart')) || []; } catch (e) {}
 const saveCart = () => { try { localStorage.setItem('ck_cart', JSON.stringify(cart)); } catch (e) {} };
-const isKeeper = () => me && me.role === 'keeper';
+// 能管库存（入库/出库/借出/编辑/导入/记录）：库管员和采购（设备部）都可以
+const isKeeper = () => me && (me.role === 'keeper' || me.role === 'buyer');
 const item = id => S.byId.get(id);
 
 /* ---------- 写入：所有改库存的动作都在这里 ---------- */
@@ -592,7 +593,7 @@ function banners() {
   return h;
 }
 function tabsFor(r) {
-  return r === 'keeper' ? ['stock', 'req', 'lend', 'rec', 'more']
+  return r === 'keeper' || r === 'buyer' ? ['stock', 'req', 'lend', 'rec', 'more']
     : r === 'user' ? ['stock', 'req', 'lend']
     : r === 'buyer' ? ['stock', 'req'] : ['stock', 'lend'];
 }
@@ -1093,7 +1094,14 @@ function viewReq() {
     const buys = S.reqs.filter(r => r.kind === 'buy');
     const act = r => r.status === 'pending' ? `<button class="btn warn sm" data-act="buyReject" data-id="${r.id}">拒绝</button><button class="btn line2 sm" data-act="buyEdit" data-id="${r.id}">改清单</button><button class="btn pri sm" data-act="buyOrdered" data-id="${r.id}">已下单</button>`
       : (r.status === 'ordered' || r.status === 'partial') ? `<button class="btn line2 sm" data-act="buyEdit" data-id="${r.id}">改清单</button>` : '';
-    return `<div class="h"><h2>采购申报</h2></div>${buys.length ? buys.map(r => buyCard(r, act(r))).join('') : '<div class="empty">库管员还没有提交采购申报</div>'}`;
+    // 采购也能看到领用申报（只看，处理还是库管员）
+    const pend = S.reqs.filter(r => r.kind === 'use' && r.status === 'pending');
+    const done = S.reqs.filter(r => r.kind === 'use' && r.status !== 'pending').slice(0, 20);
+    return `<div class="reqgrid"><div class="ra"><div class="h"><h2>采购申报</h2></div>
+      ${buys.length ? buys.map(r => buyCard(r, act(r))).join('') : '<div class="card empty" style="padding:20px">库管员还没有提交采购申报</div>'}</div>
+      <div class="rb"><div class="h"><h2>待处理领用（${pend.length}）</h2></div>
+      ${pend.length ? pend.map(r => useCard(r, false)).join('') : '<div class="card empty" style="padding:20px">没有待处理的领用申报</div>'}</div>
+      <div class="rc">${done.length ? `<div class="h"><h2>已处理的领用</h2></div>${done.map(r => useCard(r, false)).join('')}` : ''}</div></div>`;
   }
   // 领用人
   const mine = S.reqs.filter(r => r.kind === 'use' && r.requester === me.name);
@@ -1104,7 +1112,7 @@ function viewReq() {
 
 function openCart() {
   const draw = () => cart.map((c, i) => { const it = item(c.itemId); return `<div class="line"><div class="mid">${esc(it ? it.name : '已删除的物品')} ${esc(it && it.spec || '')}<small>${esc(it && it.unit || '')}</small></div><input data-ci="${i}" inputmode="decimal" value="${fmt(c.qty)}"><button class="x" data-rm="${i}" aria-label="移除">×</button></div>`; }).join('') || '<div class="empty">清单是空的</div>';
-  openSheet(`${head('申报清单', '发送后只有你和库管员能看到。')}<div id="cl">${draw()}</div>
+  openSheet(`${head('申报清单', '发送后你、库管员和采购能看到，由库管员处理。')}<div id="cl">${draw()}</div>
     <div class="field"><label>备注（可不填）</label><input id="cn" placeholder="比如：二号营地用"></div>
     <div class="btns"><button class="btn pri" id="send">发送给库管员</button></div>`, sh => {
     sh.querySelector('#cl').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return; cart.splice(+b.dataset.rm, 1); saveCart(); sh.querySelector('#cl').innerHTML = draw(); render(); });

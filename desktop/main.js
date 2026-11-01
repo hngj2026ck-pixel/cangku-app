@@ -27,9 +27,9 @@ function showWin(view) {
 }
 
 async function createWindow(hidden) {
-  // 窗口大小：记住上次的位置和大小；第一次打开直接铺满屏幕（最大化）
+  // 窗口大小：第一次打开 1460×800（不铺满）；之后记住用户自己调的位置和大小
   const st = loadSettings(), wa = screen.getPrimaryDisplay().workArea;
-  const b = st.bounds || { width: Math.min(1600, wa.width), height: wa.height };
+  const b = st.bounds || { width: Math.min(1460, wa.width), height: Math.min(800, wa.height) };
   win = new BrowserWindow({
     ...b, minWidth: 420, minHeight: 600, show: false, title: '仓库',
     icon: path.join(BUILD, 'icon.png'), backgroundColor: '#E4E6E5', autoHideMenuBar: true,
@@ -38,8 +38,8 @@ async function createWindow(hidden) {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   win.setMenu(null);
-  // 开机自启是藏在托盘里的；Windows 上隐藏时调用最大化会把窗口弹出来，所以等第一次打开时再最大化
-  if (st.maximized !== false) { if (hidden) pendingMax = true; else win.maximize(); }
+  // 上次是最大化关的才最大化；开机自启藏在托盘时先不最大化（Windows 会把窗口弹出来），等第一次打开再做
+  if (st.maximized === true) { if (hidden) pendingMax = true; else win.maximize(); }
   if (!hidden) win.show();
   const remember = () => { if (!win || win.isMinimized()) return; const s2 = loadSettings(); s2.maximized = win.isMaximized(); if (!s2.maximized) s2.bounds = win.getBounds(); saveSettings(s2); };
   win.on('resized', remember); win.on('moved', remember); win.on('maximize', remember); win.on('unmaximize', remember);

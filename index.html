@@ -349,7 +349,7 @@ const FB_VER = '10.12.2';
 // 自动化测试用：网址带 ?emu=1 时连本机的 Firebase 模拟器（只在 GitHub Actions 里用）
 const EMU = /[?&]emu=1/.test(location.search) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const LOGIN = !!FIREBASE_CONFIG || (() => { try { return localStorage.getItem('ck_login_test') === '1'; } catch (e) { return false; } })();
-const APP_VER = '2026-11-01 p2';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 p3';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -472,7 +472,7 @@ let DB;
 const ROLES = { keeper: '库管员', user: '领用人', buyer: '设备部', leader: '管理员', viewer: '查看者' };
 const S = {
   items: [], all: [], byId: new Map(), lends: [], reqs: [], recs: [], audit: [], settings: { returnCats: [] },
-  view: 'stock', cat: '全部', q: '', lendSort: 'time', members: [], devreqs: [],
+  view: 'stock', cat: '全部', q: '', lendSort: 'time', members: [], devreqs: [], roster: [],
   sync: { cache: true, pending: false, last: null }, err: '', dirty: false
 };
 let me = null; if (!LOGIN) try { me = JSON.parse(localStorage.getItem('ck_me')); } catch (e) {}
@@ -896,7 +896,6 @@ const nameKey = n => String(n || '').trim().replace(/\s+/g, ' ').replace(/\//g, 
 let loginState = { member: undefined, dev: undefined }, hadMember = false, adminOn = false;
 function startLogin() {
   DB.subDoc('members', DB.uid, m => { loginState.member = m; loginChanged(); });
-  DB.subDoc('devreqs', DB.uid, d => { loginState.dev = d; loginChanged(); });
 }
 function loginChanged() {
   const { member, dev } = loginState;
@@ -905,14 +904,13 @@ function loginChanged() {
     const was = me && JSON.stringify(me);
     me = { name: member.name, role: member.role || 'user', admin: !!member.admin };
     if (!hadMember) { hadMember = true; closeSheet(); startData(); }
-    if (me.admin && !adminOn) { adminOn = true; DB.sub('members', a => { S.members = a; render(); }); DB.sub('devreqs', a => { S.devreqs = a; render(); }); }
+    if (me.admin && !adminOn) { adminOn = true; DB.sub('members', a => { S.members = a; render(); }); DB.sub('roster', a => { S.roster = a; selfRoster(); render(); }); }
     if (was !== JSON.stringify(me)) { S.sel = null; if (!tabsFor(me.role).includes(S.view)) S.view = 'stock'; $('#main').innerHTML = ''; }
     render(); return;
   }
   // 这台手机没有身份（第一次用，或者被管理员移除 / 名字换到了别的手机）
   if (hadMember) { location.reload(); return; }
-  if (dev === undefined) return;
-  openLogin(dev);
+  openLogin(null);
 }
 function openLogin(dev) {
   const waiting = dev && dev.status === 'pending', rejected = dev && dev.status === 'rejected';
@@ -937,115 +935,104 @@ function openLogin(dev) {
     };
   }, true);
 }
+// 名单登录：后台名单（roster）里有这个名字就直接进，身份按名单；没有就自动登记为领用人。
+// 一个人可以在几台设备上登录（手机、电脑），不需要管理员同意。
 async function loginByName(n) {
   const t = now(), my = DB.uid;
-  const bound = await DB.getFresh('names', n);
-  if (!bound) {
-    const boot = await DB.getFresh('meta', 'boot');
-    const ops = [{ op: 'set', c: 'names', id: n, d: { uid: my, t } },
-                 { op: 'set', c: 'members', id: my, d: { name: n, role: boot ? 'user' : 'leader', admin: !boot, t } }];
-    if (!boot) ops.push({ op: 'set', c: 'meta', id: 'boot', d: { uid: my, t } });   // 第一个人：管理员
-    await DB.commitAsync(ops);
-    if (!boot) toast('你是第一个使用的人，已自动成为管理员');
-    return;
-  }
-  // 名字已经在别的设备上：发新设备申请，等管理员同意
-  await DB.commitAsync([{ op: 'set', c: 'devreqs', id: my, d: { name: n, t, status: 'pending' } }]);
+  const r = await DB.getFresh('roster', n);
+  if (r) { await DB.commitAsync([{ op: 'set', c: 'members', id: my, d: { name: n, role: r.role || 'user', admin: !!r.admin, t } }]); return; }
+  const boot = await DB.getFresh('meta', 'boot');
+  const role = boot ? 'user' : 'leader', admin = !boot;          // 整个系统第一个人：管理员
+  const ops = [{ op: 'set', c: 'roster', id: n, d: { role, admin, t } }, { op: 'set', c: 'members', id: my, d: { name: n, role, admin, t } }];
+  if (!boot) ops.push({ op: 'set', c: 'meta', id: 'boot', d: { uid: my, t } });
+  await DB.commitAsync(ops);
+  if (!boot) toast('你是第一个使用的人，已自动成为管理员');
+}
+// 管理员自己如果不在名单里（旧版登记的），补进去，免得别的设备登录时被当成新人
+let rosterHealed = false;
+function selfRoster() {
+  if (rosterHealed || !me || !me.admin) return; rosterHealed = true;
+  if (!S.roster.some(r => r.id === me.name)) DB.commit([{ op: 'set', c: 'roster', id: me.name, d: { role: me.role, admin: true, t: now() } }]);
 }
 function openMe() {
   if (!LOGIN) return openIdentity(false);
   if (!me) return;
   openSheet(`${head(esc(me.name), `${ROLES[me.role] || me.role}${me.admin && me.role !== 'leader' ? ' · 能管人员' : ''}`)}
-    <div class="note" style="white-space:normal;line-height:1.7">这台设备已经绑定你的名字，别人知道你的名字也登不上。<br>
-    在电脑或新手机上用：输入名字，等管理员点「同意」。多一台设备就选「加一台设备」，换手机就选「退出旧设备」。<br>
-    身份（库管员、设备部等）由管理员设置。</div>
+    <div class="note" style="white-space:normal;line-height:1.7">在电脑或别的手机上用：输入同一个名字就能进，几台设备可以同时用。<br>
+    身份（库管员、设备部、管理员）由管理员在「人员管理」里设置。</div>
     ${me.admin ? '<div class="btns"><button class="btn pri" id="goAdmin">人员管理</button></div>' : ''}`, sh => {
     const g = sh.querySelector('#goAdmin'); if (g) g.onclick = () => openAdmin();
   });
 }
 
-/* ---------- 管理员：人员 + 新设备申请 ----------
-   一个人可以有几台设备（手机、电脑），每台设备一条 members 记录，名字相同就是同一个人 */
-const pendingDev = () => S.devreqs.filter(d => d.status === 'pending');
-function staff() {
-  const by = new Map();
-  for (const m of S.members) { const p = by.get(m.name) || { name: m.name, devs: [] }; p.devs.push(m); by.set(m.name, p); }
-  return [...by.values()].map(p => {
-    p.devs.sort((a, b) => (a.t || 0) - (b.t || 0));
-    const f = p.devs.find(d => d.id === DB.uid) || p.devs[0];
-    p.role = f.role; p.admin = p.devs.some(d => d.admin); p.t = Math.min(...p.devs.map(d => d.t || now())); p.mine = p.devs.some(d => d.id === DB.uid);
-    return p;
-  });
-}
+/* ---------- 管理员：人员名单和身份 ---------- */
+const pendingDev = () => [];
 function openAdmin() {
+  let q = '';
   const draw = () => {
-    const dv = pendingDev().sort((a, b) => b.t - a.t);
-    const ps = staff().sort((a, b) => (b.admin - a.admin) || String(a.role).localeCompare(String(b.role)) || String(a.name).localeCompare(String(b.name), 'zh'));
-    const has = n => S.members.some(m => m.name === n);
-    return `${dv.length ? `<div class="sec"><h3>新设备申请（${dv.length}）</h3>${dv.map(d => `<div class="card adm"><div><b>${esc(d.name)}</b><div class="sub">${fmtT(d.t)} 在一台新设备（手机或电脑）上申请用这个名字</div></div>
-        <div class="btns"><button class="btn warn sm" data-dno="${d.id}">不同意</button>${has(d.name) ? `<button class="btn line2 sm" data-dkick="${d.id}">同意，退出旧设备</button>` : ''}<button class="btn pri sm" data-dok="${d.id}">同意${has(d.name) ? '，加一台设备' : ''}</button></div></div>`).join('')}
-      <div class="note" style="white-space:normal">本人多一台电脑或手机：点「加一台设备」，几台都能用。换了手机（旧的丢了、坏了、不用了）：点「退出旧设备」。不认识的申请就点「不同意」。</div></div>` : ''}
-      <div class="sec"><h3>人员（${ps.length}）</h3>${ps.map(p => `<div class="card adm" data-pname="${esc(p.name)}"><div><b>${esc(p.name)}</b>${p.mine ? ' <small class="sub">（我）</small>' : ''}${p.admin ? ' <span class="tag b">能管人员</span>' : ''}
-          <div class="sub">加入于 ${fmtD(p.t)}　${p.devs.length} 台设备</div>
-          ${p.devs.length > 1 ? `<div class="devs">${p.devs.map((d, i) => `<div class="dev"><span>设备 ${i + 1}${d.id === DB.uid ? '（就是这台）' : ''}　${fmtD(d.t || 0)} 加入</span><button class="link" data-rmdev="${d.id}">退出这台</button></div>`).join('')}</div>` : ''}</div>
-        <div class="seg sm">${Object.entries(ROLES).map(([k, v]) => `<button data-role="${k}" class="${p.role === k ? 'on' : ''}">${v}</button>`).join('')}</div>
-        <div class="btns">${p.role === 'leader' ? '' : `<button class="btn line2 sm" data-adm="1">${p.admin ? '取消管人权限' : '也让他管人员'}</button>`}<button class="btn warn sm" data-rm="1">移除</button></div></div>`).join('')}</div>
-      <div class="note" style="white-space:normal">新人第一次进入默认是「领用人」，在这里改成库管员、设备部或管理员。「管理员」能看全部、导入导出、管人员，但不改库存。库管员也可以点「也让他管人员」。人走了点「移除」，他所有设备马上退出，以前的记录都保留。</div>`;
+    const leaders = S.roster.filter(r => r.role === 'leader').length;
+    const order = { leader: 0, keeper: 1, buyer: 2, user: 3, viewer: 4 };
+    const list = S.roster.filter(r => !q || r.id.includes(q)).sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || a.id.localeCompare(b.id, 'zh'));
+    const online = n => S.members.some(m => m.name === n);
+    return `<div class="sub" style="margin:2px 0 10px">共 ${S.roster.length} 人，管理员 ${leaders} 人。${list.length !== S.roster.length ? `找到 ${list.length} 人。` : ''}</div>
+      ${list.map(r => `<div class="card adm" data-rn="${esc(r.id)}"><div><b>${esc(r.id)}</b>${r.id === me.name ? ' <small class="sub">（我）</small>' : ''}<span class="sub" style="margin-left:8px">${online(r.id) ? '已用过' : '还没登录过'}</span></div>
+        <div class="seg sm">${Object.entries(ROLES).filter(([k]) => k !== 'viewer' || r.role === 'viewer').map(([k, v]) => `<button data-role="${k}" class="${r.role === k ? 'on' : ''}">${v}</button>`).join('')}</div></div>`).join('') || '<div class="empty">没有找到</div>'}`;
   };
-  const sh = openSheet(`${head('人员管理', '只有管理员能看到这里')}<div id="admBox">${draw()}</div>`, sh => {
+  const sh = openSheet(`${head('人员管理', '在这里设置每个人的身份。名单里的人输入名字就能直接进。')}
+    <div class="field"><input id="admQ" type="search" placeholder="搜名字" autocomplete="off"></div>
+    <div id="admBox">${draw()}</div>
+    <div class="btns"><label class="btn line2 filebtn">从表格导入名单<input type="file" id="admFile" accept=".xlsx,.xls,.csv"></label></div>
+    <div class="note" style="white-space:normal">表格第一列写名字；如果有「身份」列（库管员 / 设备部 / 管理员 / 领用人），按它设置，没有就都是领用人。已经在名单里的人身份不会被覆盖成领用人。</div>`, sh => {
+    sh.querySelector('#admQ').addEventListener('input', e => { q = e.target.value.trim(); sh.querySelector('#admBox').innerHTML = draw(); });
+    sh.querySelector('#admFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importRoster(f); });
     sh.addEventListener('click', async e => {
-      const b = e.target.closest('button'); if (!b) return;
-      try {
-        if (b.dataset.dok) await approveDev(b.dataset.dok, false);
-        else if (b.dataset.dkick) { if (confirm('同意，并让这个人的其他设备退出？')) await approveDev(b.dataset.dkick, true); }
-        else if (b.dataset.dno) await DB.commitAsync([{ op: 'upd', c: 'devreqs', id: b.dataset.dno, d: { status: 'rejected' } }]);
-        else if (b.dataset.rmdev) {
-          const d = S.members.find(x => x.id === b.dataset.rmdev); if (!d) return;
-          if (!confirm(d.id === DB.uid ? '让你现在用的这台设备退出？' : `让「${d.name}」的这台设备退出？他的其他设备还能用。`)) return;
-          const ops = [{ op: 'del', c: 'members', id: d.id }];
-          const nb = await DB.getFresh('names', d.name), rest = S.members.filter(x => x.name === d.name && x.id !== d.id);
-          if (nb && nb.uid === d.id && rest.length) ops.push({ op: 'set', c: 'names', id: d.name, d: { uid: rest[0].id, t: now() } });
-          await DB.commitAsync(ops);
-        } else {
-          const card = b.closest('[data-pname]'); if (!card) return;
-          const p = staff().find(x => x.name === card.dataset.pname); if (!p) return;
-          const admins = staff().filter(x => x.admin).length;
-          const all = d => p.devs.map(x => ({ op: 'upd', c: 'members', id: x.id, d }));
-          if (b.dataset.role) {
-            if (b.dataset.role === p.role) return;
-            const d = { role: b.dataset.role }; if (b.dataset.role === 'leader') d.admin = true;   // 「管理员」身份自带管人权限
-            await DB.commitAsync(all(d));
-          } else if (b.dataset.adm) {
-            if (p.role === 'leader') return alert('身份是「管理员」的人一定能管人员。要取消，先把他的身份改成别的。');
-            if (p.admin && admins <= 1) return alert('至少要留一个管理员');
-            if (p.admin && p.mine && !confirm('取消自己的管人权限？取消后你就进不了这里了。')) return;
-            await DB.commitAsync(all({ admin: !p.admin }));
-          } else if (b.dataset.rm) {
-            if (p.admin && admins <= 1) return alert('至少要留一个管理员，先把别人设为管理员再移除');
-            if (!confirm(p.mine ? '移除你自己？你所有设备会马上退出。' : `移除「${p.name}」？他所有设备会马上退出，以前的记录都保留。`)) return;
-            await DB.commitAsync([...p.devs.map(x => ({ op: 'del', c: 'members', id: x.id })), { op: 'del', c: 'names', id: p.name }]);
-          }
-        }
-      } catch (err) { console.error(err); alert('没成功：' + (err.code || err.message || err)); }
+      const b = e.target.closest('[data-role]'); if (!b) return;
+      const card = b.closest('[data-rn]'); const r = S.roster.find(x => x.id === card.dataset.rn); if (!r || r.role === b.dataset.role) return;
+      const role = b.dataset.role;
+      if (r.role === 'leader' && S.roster.filter(x => x.role === 'leader').length <= 1) return alert('至少要留一个管理员');
+      if (r.id === me.name && r.role === 'leader' && !confirm('把自己改成别的身份？改完你就进不了人员管理了。')) return;
+      try { await DB.commitAsync(roleOps(r.id, role)); } catch (err) { console.error(err); alert('没成功：' + (err.code || err.message || err)); }
     });
   });
-  admRedraw = () => { const box = sh.isConnected && sh.querySelector('#admBox'); if (box) box.innerHTML = draw(); else admRedraw = null; };
+  admRedraw = () => { const box = sh.isConnected && sh.querySelector('#admBox'); if (box && document.activeElement !== sh.querySelector('#admQ')) box.innerHTML = draw(); else if (!box) admRedraw = null; };
+}
+// 改身份：名单 + 这个人已经登录的所有设备一起改（「管理员」身份自带管人权限）
+function roleOps(name, role) {
+  const admin = role === 'leader';
+  return [{ op: 'set', c: 'roster', id: name, d: { role, admin, t: now() } },
+          ...S.members.filter(m => m.name === name).map(m => ({ op: 'upd', c: 'members', id: m.id, d: { role, admin } }))];
+}
+const ROLE_BY_LABEL = { 库管员: 'keeper', 库管: 'keeper', 设备部: 'buyer', 采购: 'buyer', 管理员: 'leader', 领导: 'leader', 领用人: 'user', 查看者: 'viewer' };
+async function importRoster(file) {
+  try {
+    const X = await loadXLSX();
+    const wb = X.read(await file.arrayBuffer(), { type: 'array' });
+    const rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    const hdr = rows.findIndex(r => r.some(c => /身份|角色/.test(String(c))));
+    const rc = hdr >= 0 ? rows[hdr].findIndex(c => /身份|角色/.test(String(c))) : -1;
+    const nc = hdr >= 0 ? Math.max(0, rows[hdr].findIndex(c => /姓名|名字/.test(String(c)))) : 0;
+    const got = new Map();
+    rows.slice(hdr + 1).forEach(r => {
+      const n = nameKey(String(r[nc] ?? '').replace(/\d+$/, ''));      // 「高小伟102」→「高小伟」
+      if (!n || /^(姓名|名字)$/.test(n)) return;
+      const role = rc >= 0 ? ROLE_BY_LABEL[String(r[rc]).trim()] : null;
+      if (!got.has(n) || role) got.set(n, role);
+    });
+    if (!got.size) return alert('表格里没找到名字（第一列写名字）');
+    const ops = [];
+    let add = 0, chg = 0;
+    for (const [n, role] of got) {
+      const cur = S.roster.find(x => x.id === n);
+      if (!cur) { ops.push(...roleOps(n, role || 'user')); add++; }
+      else if (role && role !== cur.role) { ops.push(...roleOps(n, role)); chg++; }
+    }
+    if (!ops.length) return toast(`名单没有变化（${got.size} 人都已在名单里）`);
+    if (!confirm(`表格里 ${got.size} 人：新加 ${add} 人${chg ? `，改身份 ${chg} 人` : ''}。确定导入？`)) return;
+    for (let i = 0; i < ops.length; i += 400) await DB.commitAsync(ops.slice(i, i + 400));
+    toast(`已导入：新加 ${add} 人${chg ? `，改身份 ${chg} 人` : ''}`);
+  } catch (e) { console.error(e); alert('导入没成功：' + (e.code || e.message || e)); }
 }
 let admRedraw = null;
-// 同意新设备：kick=false 加一台（原来的设备照常用）；kick=true 换设备（原来的全部退出）
-async function approveDev(newUid, kick) {
-  const d = S.devreqs.find(x => x.id === newUid); if (!d) return;
-  const olds = S.members.filter(m => m.name === d.name && m.id !== newUid);
-  const ref = olds.find(m => m.admin) || olds[0];
-  const ops = [
-    { op: 'set', c: 'members', id: newUid, d: { name: d.name, role: ref ? ref.role : 'user', admin: ref ? olds.some(m => m.admin) : false, t: now() } },
-    { op: 'del', c: 'devreqs', id: newUid }
-  ];
-  if (kick || !olds.length) { ops.push({ op: 'set', c: 'names', id: d.name, d: { uid: newUid, t: now() } }); if (kick) olds.forEach(m => ops.push({ op: 'del', c: 'members', id: m.id })); }
-  await DB.commitAsync(ops);
-  toast(kick ? `已同意，${d.name} 的旧设备已退出` : `已同意，${d.name} 的新设备可以用了`);
-}
-
 // 把测试版（cangku-test）里的数据整个搬到正式库：物品、记录、借出、申报、修改记录、照片、设置
 // 用原来的编号写入，所以点两次也不会重复
 async function openImportTest() {
@@ -1677,7 +1664,7 @@ function viewMore() {
   const noPhoto = S.items.filter(i => !i.hasPhoto).length, k = isKeeper(), canSee = k || (me && me.role === 'leader');
   const dv = me && me.admin ? pendingDev().length : 0;
   const admin = me && me.admin ? `<div class="h"><h2>人员</h2></div><div class="menu">
-      <button data-act="admin">人员管理 <small>${dv ? `<span class="tag r">${dv} 个新设备申请</span>` : `${staff().length} 人`}</small></button>
+      <button data-act="admin">人员管理 <small>${S.roster.length} 人</small></button>
       <button data-act="importTest">从测试版导入数据</button>
     </div>` : '';
   if (!canSee) return admin + `<p class="foot">正式版　版本 ${APP_VER}</p>`;

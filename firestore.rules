@@ -1,73 +1,60 @@
 rules_version = '2';
-// 仓库软件正式版安全规则
-// - 没登记过名字的手机：只能登记自己（名字没被占用时）或提交换手机申请，看不到任何仓库数据
-// - 登记过的人（members 里有这台手机）：能读写仓库数据
-// - 人员、身份、管理员、换手机：只有管理员能改
+// 仓库软件正式版安全规则（名单登录版）
+// - 名单（roster）里有的名字：任何设备输入名字就能进，身份按名单
+// - 名单里没有的名字：自动登记为领用人
+// - 名单和身份只有管理员能改；没登录过的设备看不到任何仓库数据
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
     function memberPath(u) { return /databases/$(database)/documents/members/$(u); }
-    function namePath(n) { return /databases/$(database)/documents/names/$(n); }
+    function rosterPath(n) { return /databases/$(database)/documents/roster/$(n); }
     function bootPath() { return /databases/$(database)/documents/meta/boot; }
     function isMember() { return signed() && exists(memberPath(request.auth.uid)); }
     function isAdmin() { return isMember() && get(memberPath(request.auth.uid)).data.admin == true; }
     function okRole(r) { return r in ['keeper', 'user', 'buyer', 'leader', 'viewer']; }
+    function firstOne() { return !exists(bootPath()) && getAfter(bootPath()).data.uid == request.auth.uid; }
 
-    // 这台手机是谁
+    // 名单：名字 → 身份
+    match /roster/{n} {
+      allow get: if signed();
+      allow list: if isMember();
+      // 名单里没有的人第一次进：只能把自己登记成领用人（第一个人除外：管理员）
+      allow create: if signed() && request.resource.data.keys().hasOnly(['role', 'admin', 't'])
+        && n.size() > 0 && n.size() <= 20
+        && getAfter(memberPath(request.auth.uid)).data.name == n
+        && ((request.resource.data.role == 'user' && request.resource.data.admin == false) || firstOne());
+      allow create, update, delete: if isAdmin() && (request.resource == null || okRole(request.resource.data.role));
+    }
+
+    // 这台设备是谁：身份必须和名单一致
     match /members/{u} {
       allow get: if signed() && (request.auth.uid == u || isMember());
       allow list: if isMember();
       allow create: if signed() && request.auth.uid == u
         && request.resource.data.keys().hasOnly(['name', 'role', 'admin', 't'])
-        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 20
-        && !exists(namePath(request.resource.data.name))
-        && getAfter(namePath(request.resource.data.name)).data.uid == u
-        && (
-          // 普通新人：只能是领用人、不是管理员
-          (request.resource.data.role == 'user' && request.resource.data.admin == false && exists(bootPath()))
-          // 第一个人：自动成为管理员（只发生一次）
-          || (!exists(bootPath()) && getAfter(bootPath()).data.uid == u && request.resource.data.admin == true && okRole(request.resource.data.role))
-        );
-      allow create: if isAdmin() && okRole(request.resource.data.role);
-      allow update: if isAdmin() && okRole(request.resource.data.role);
+        && request.resource.data.name is string
+        && getAfter(rosterPath(request.resource.data.name)).data.role == request.resource.data.role
+        && getAfter(rosterPath(request.resource.data.name)).data.admin == request.resource.data.admin;
+      allow create, update: if isAdmin() && okRole(request.resource.data.role);
       allow delete: if isAdmin();
     }
 
-    // 名字绑在哪台手机（保证一个名字只在一台手机上）
-    match /names/{n} {
-      allow get: if signed();
-      allow list: if isMember();
-      allow create: if signed() && request.resource.data.uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['uid', 't'])
-        && getAfter(memberPath(request.auth.uid)).data.name == n;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // 换手机申请
-    match /devreqs/{u} {
-      allow get: if signed() && (request.auth.uid == u || isMember());
-      allow list: if isAdmin();
-      allow create, update: if signed() && request.auth.uid == u
-        && request.resource.data.keys().hasOnly(['name', 't', 'status'])
-        && request.resource.data.status == 'pending'
-        && request.resource.data.name is string && request.resource.data.name.size() <= 20;
-      allow update, delete: if isAdmin();
-    }
-
-    // 第一个管理员的标记：只能创建一次，之后谁也改不了
     match /meta/boot {
       allow get: if signed();
       allow create: if signed() && request.resource.data.keys().hasOnly(['uid', 't'])
         && request.resource.data.uid == request.auth.uid
         && getAfter(memberPath(request.auth.uid)).data.admin == true;
     }
-    // 其他设置（需归还的分类等）
     match /meta/{id} {
       allow read: if isMember();
       allow write: if isMember() && id != 'boot';
     }
 
-    // 仓库数据：登记过的人才能读写
+    // 旧版留下的集合：只读
+    match /names/{n} { allow read: if isMember(); allow write: if isAdmin(); }
+    match /devreqs/{u} { allow read, write: if isAdmin(); }
+
+    // 仓库数据：登录过的人才能读写
     match /items/{id} { allow read, write: if isMember(); }
     match /records/{id} { allow read, write: if isMember(); }
     match /lends/{id} { allow read, write: if isMember(); }

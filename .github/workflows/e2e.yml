@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - run: npm i --no-save firebase-tools@13
-      - run: pip install playwright && python -m playwright install --with-deps chromium
+      - run: pip install playwright openpyxl && python -m playwright install --with-deps chromium
       - run: python -m http.server 8000 & sleep 1
       - run: npx firebase emulators:exec --only firestore,auth --project cangku-prod "python tests/e2e.py"
       - uses: actions/upload-artifact@v4

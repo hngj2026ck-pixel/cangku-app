@@ -209,7 +209,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 d';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 e';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -417,7 +417,7 @@ addEventListener('offline', () => render());
 let rq = false;
 function render() { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; doRender(); }); }
 function doRender() {
-  renderTop(); renderTabs(); renderLists();
+  renderTop(); renderTabs(); renderLists(); if (DESK) deskTick();
   const main = $('#main'); const ae = document.activeElement;
   if (S.view !== 'stock' && ae && main.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) { S.dirty = true; renderFloat(); return; }
   if (S.view === 'stock') {
@@ -1518,15 +1518,33 @@ function openImport() {
     };
   });
 }
-function expStock() {
-  writeX(S.items.slice().sort((a, b) => String(a.category).localeCompare(String(b.category), 'zh') || String(a.name).localeCompare(String(b.name), 'zh')).map(i => {
+function rowsStock() {
+  return S.items.slice().sort((a, b) => String(a.category).localeCompare(String(b.category), 'zh') || String(a.name).localeCompare(String(b.name), 'zh')).map(i => {
     const row = { 名称: i.name, 配件编号: i.code || '', 规格: i.spec || '', 适用机型: i.model || '', 分类: i.category || '', 别名: i.alias || '', 单位: i.unit || '',
       在库: r3(i.stock), 借出: r3(i.lent), 损坏: r3(i.broken), 总数: r3((i.stock || 0) + (i.lent || 0)), 需归还: i.returnable ? '是' : '否',
       货位号: i.shelf || '', 仓库号: i.warehouse || '', 存放地点: i.place || '', 入库时间: i.inDate || '' };
     (i.extra || []).forEach(e => { if (!(e.k in row)) row[e.k] = e.v; });
     return row;
-  }), '库存', '库存');
+  });
 }
+function expStock() { writeX(rowsStock(), '库存', '库存'); }
+const rowsRec = (a = 0, b = Infinity) => S.recs.filter(r => r.t >= a && r.t < b).map(r => ({ 时间: fmtD(r.t) + ' ' + fmtHM(r.t), 类型: TYPE[r.type] || r.type, 物品: r.name, 规格: r.spec || '', 数量: signed(r)[0], 单位: r.unit || '', 领用人: r.person || '', 状态: r.state || '', 备注: r.note || '', 登记人: r.by || '' }));
+function rowsReq(kind, a = 0, b = Infinity, p = '', st = '') {
+  const m = kind === 'buy' ? BUY_ST : USE_ST; const rows = [];
+  S.reqs.filter(r => r.kind === kind && r.t >= a && r.t < b && (!p || r.requester === p) && (!st || r.status === st)).forEach(r => r.lines.forEach((l, i) => {
+    const common = { 状态: (m[r.status] || [r.status])[0], 处理人: r.handledBy || '', 备注: r.note || '', 拒绝原因: r.reason || '' };
+    if (kind === 'use') rows.push({ 时间: fmtD(r.t) + ' ' + fmtHM(r.t), 申报人: r.requester, 物品: l.name, 规格: l.spec || '', 申请数量: r3(l.qty), 单位: l.unit || '', 发放数量: r.given ? r3(r.given[i]) : '', ...common });
+    else { const pl = planOf(l); rows.push({
+      时间: fmtD(r.t) + ' ' + fmtHM(r.t), 申报人: r.requester,
+      原申购物品: l.added ? '' : l.name, 原规格: l.added ? '' : (l.spec || ''), 原申购数量: l.added ? '' : r3(l.qty),
+      采购后物品: l.drop || l.byKeeper ? '' : pl.name, 采购后规格: l.drop || l.byKeeper ? '' : pl.spec, 采购后数量: l.byKeeper ? '' : r3(planQty(l)),
+      实际收到物品: l.inq ? recvOf(l).name : '', 实际收到规格: l.inq ? recvOf(l).spec : '', 收货入库数量: r3(l.inq || 0), 单位: recvOf(l).unit,
+      改动: changeTags(l).join('、'), ...common, 收货备注: (r.arrNotes || []).map(n => n.text).join('；') }); }
+  }));
+  return rows;
+}
+const rowsLend = () => S.lends.filter(l => l.open).sort((a, b) => String(a.person).localeCompare(String(b.person), 'zh') || a.t - b.t).map(l => ({
+  借用人: l.person || '', 物品: l.name, 规格: l.spec || '', 借出数量: r3(l.qty), 已还: r3(l.returned), 未还: r3(l.qty - l.returned), 单位: l.unit || '', 借出日期: fmtD(l.t), 借出天数: daysSince(l.t) }));
 function dateRange(sh) {
   const a = sh.querySelector('#d1').value, b = sh.querySelector('#d2').value;
   return [a ? new Date(a + 'T00:00:00').getTime() : 0, b ? new Date(b + 'T00:00:00').getTime() + 86400000 : Infinity];
@@ -1536,7 +1554,7 @@ function expRec() {
   openSheet(`${head('导出出入库记录')}${dateFields()}<div class="btns"><button class="btn pri" id="go">导出</button></div>`, sh => {
     sh.querySelector('#go').onclick = () => {
       const [a, b] = dateRange(sh);
-      writeX(S.recs.filter(r => r.t >= a && r.t < b).map(r => ({ 时间: fmtD(r.t) + ' ' + fmtHM(r.t), 类型: TYPE[r.type] || r.type, 物品: r.name, 规格: r.spec || '', 数量: signed(r)[0], 单位: r.unit || '', 领用人: r.person || '', 状态: r.state || '', 备注: r.note || '', 登记人: r.by || '' })), '出入库记录', '出入库记录');
+      writeX(rowsRec(a, b), '出入库记录', '出入库记录');
     };
   });
 }
@@ -1553,25 +1571,48 @@ function expReq() {
     sh.querySelector('#k').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; sh.querySelectorAll('#k button').forEach(x => x.classList.toggle('on', x === b)); fill(); });
     sh.querySelector('#go').onclick = () => {
       const [a, b] = dateRange(sh); const p = sh.querySelector('#pp').value.trim(); const st = sh.querySelector('#ss').value;
-      const m = kind === 'buy' ? BUY_ST : USE_ST; const rows = [];
-      S.reqs.filter(r => r.kind === kind && r.t >= a && r.t < b && (!p || r.requester === p) && (!st || r.status === st)).forEach(r => r.lines.forEach((l, i) => {
-        const common = { 状态: (m[r.status] || [r.status])[0], 处理人: r.handledBy || '', 备注: r.note || '', 拒绝原因: r.reason || '' };
-        if (kind === 'use') rows.push({ 时间: fmtD(r.t) + ' ' + fmtHM(r.t), 申报人: r.requester, 物品: l.name, 规格: l.spec || '', 申请数量: r3(l.qty), 单位: l.unit || '', 发放数量: r.given ? r3(r.given[i]) : '', ...common });
-        else { const pl = planOf(l); rows.push({
-          时间: fmtD(r.t) + ' ' + fmtHM(r.t), 申报人: r.requester,
-          原申购物品: l.added ? '' : l.name, 原规格: l.added ? '' : (l.spec || ''), 原申购数量: l.added ? '' : r3(l.qty),
-          采购后物品: l.drop || l.byKeeper ? '' : pl.name, 采购后规格: l.drop || l.byKeeper ? '' : pl.spec, 采购后数量: l.byKeeper ? '' : r3(planQty(l)),
-          实际收到物品: l.inq ? recvOf(l).name : '', 实际收到规格: l.inq ? recvOf(l).spec : '', 收货入库数量: r3(l.inq || 0), 单位: recvOf(l).unit,
-          改动: changeTags(l).join('、'), ...common, 收货备注: (r.arrNotes || []).map(n => n.text).join('；') }); }
-      }));
+      const rows = rowsReq(kind, a, b, p, st);
       writeX(rows, kind === 'buy' ? '采购申报' : '领用申报', kind === 'buy' ? '采购申报' : '领用申报');
     };
   });
 }
-function expLend() {
-  writeX(S.lends.filter(l => l.open).sort((a, b) => String(a.person).localeCompare(String(b.person), 'zh') || a.t - b.t).map(l => ({
-    借用人: l.person || '', 物品: l.name, 规格: l.spec || '', 借出数量: r3(l.qty), 已还: r3(l.returned), 未还: r3(l.qty - l.returned), 单位: l.unit || '', 借出日期: fmtD(l.t), 借出天数: daysSince(l.t)
-  })), '借出清单', '借出清单');
+function expLend() { writeX(rowsLend(), '借出清单', '借出清单'); }
+
+/* ---------- 电脑端（Electron 外壳）：通知、托盘数字、每周备份 ---------- */
+const DESK = window.cangkuDesktop;
+let deskSeen = null, deskKey = '';
+function deskPendingList() {
+  if (!me) return [];
+  if (me.role === 'keeper') return S.reqs.filter(r => r.kind === 'use' && r.status === 'pending');
+  if (me.role === 'buyer') return S.reqs.filter(r => r.kind === 'buy' && ['pending', 'ordered', 'partial'].includes(r.status));
+  return [];
+}
+function deskTick() {
+  if (!DESK || (S.sync.cache && DB && DB.mode === 'cloud')) return;
+  const list = deskPendingList(); DESK.setPending(list.length);
+  const ids = new Set(list.map(r => r.id));
+  const key = me ? me.role + '|' + me.name : '';
+  if (key !== deskKey) { deskKey = key; deskSeen = ids; return; }  // 刚打开或换了身份：只记下现有的，不弹通知
+  if (deskSeen) {
+    const fresh = list.filter(r => !deskSeen.has(r.id) && r.status === 'pending').slice(0, 3);
+    fresh.forEach(r => DESK.notify(r.kind === 'use' ? '新的领用申报' : '新的采购申报',
+      `${r.requester}：${r.lines.slice(0, 3).map(l => `${l.name} ${fmt(l.qty)}${l.unit || ''}`).join('、')}${r.lines.length > 3 ? ` 等 ${r.lines.length} 样` : ''}`));
+  }
+  deskSeen = ids;
+}
+async function deskBackup() {
+  const X = await loadXLSX(); const wb = X.utils.book_new();
+  const add = (rows, name) => X.utils.book_append_sheet(wb, rows.length ? X.utils.json_to_sheet(rows) : X.utils.aoa_to_sheet([['（空）']]), name);
+  add(rowsStock(), '库存'); add(rowsRec(), '出入库记录'); add(rowsReq('use'), '领用申报'); add(rowsReq('buy'), '采购申报'); add(rowsLend(), '借出清单');
+  return X.write(wb, { type: 'base64', bookType: 'xlsx' });
+}
+if (DESK) {
+  DESK.onGoto(v => { S.view = v; closeSheet(); doRender(); });
+  DESK.onBackupRequest(async () => {
+    // 等数据从云端同步下来再备份，最多等 60 秒
+    for (let i = 0; i < 60 && DB && DB.mode === 'cloud' && S.sync.cache; i++) await new Promise(r => setTimeout(r, 1000));
+    try { DESK.backupDone(`仓库备份_${fmtD(now())}.xlsx`, await deskBackup()); } catch (e) { DESK.backupFailed(String(e && e.message || e)); }
+  });
 }
 
 /* ---------- 示例数据（只在本地演示用） ---------- */

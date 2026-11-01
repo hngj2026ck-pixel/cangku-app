@@ -1,0 +1,31 @@
+name: 打包电脑端
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: 安装依赖
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+      - name: 打包 Windows 安装包
+        working-directory: desktop
+        run: |
+          npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
+          npx electron-builder --win nsis --x64 --publish never
+      - name: 发布到 Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ github.run_number }}
+          name: 仓库电脑端 1.0.${{ github.run_number }}
+          body: 下载下面的 cangku-setup.exe，在 Windows 电脑上双击安装。
+          files: desktop/dist/cangku-setup.exe
+          make_latest: false

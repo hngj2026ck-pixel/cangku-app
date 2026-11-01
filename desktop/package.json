@@ -1,0 +1,28 @@
+{
+  "name": "cangku-desktop",
+  "productName": "仓库",
+  "version": "1.0.0",
+  "description": "仓库软件电脑端：开机自启、托盘、新申报通知、每周自动备份",
+  "main": "main.js",
+  "author": "cangku",
+  "private": true,
+  "scripts": { "start": "electron .", "dist": "electron-builder --win nsis --x64 --publish never" },
+  "devDependencies": { "electron": "^31.7.0", "electron-builder": "^24.13.3" },
+  "build": {
+    "appId": "com.cangku.desktop",
+    "productName": "仓库",
+    "artifactName": "cangku-setup.exe",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "build/tray*.png", "build/icon.png", "offline.html"],
+    "win": { "target": "nsis", "icon": "build/icon.ico" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "仓库",
+      "installerLanguages": ["zh_CN"],
+      "language": "2052"
+    }
+  }
+}

@@ -3,7 +3,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, dialog, shell, na
 const path = require('path');
 const fs = require('fs');
 
-const URL = 'https://gaotianci449-source.github.io/cangku/';
+const URL = 'https://hngj2026ck-pixel.github.io/cangku/';
 const KEEP_BACKUPS = 12;                 // 只保留最近 12 份备份
 const WEEK = 7 * 24 * 3600 * 1000;
 const BUILD = path.join(__dirname, 'build');

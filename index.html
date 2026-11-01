@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18252B">
 <title>仓库（测试版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#E9ECEA; --card:#FFFFFF; --ink:#18252B; --mute:#5F6E74; --line:#D3D9D6; --soft:#EEF1F0;
@@ -180,6 +182,114 @@ table.pv th,table.pv td{border-bottom:1px solid var(--soft);padding:6px 4px;text
 .eline .row2 input{width:96px;height:44px;border:1.5px solid var(--line);border-radius:8px;text-align:center;font-size:18px;font-weight:700}
 .eline .specbox{display:flex;gap:6px;margin-top:8px}
 .eline .specbox input{flex:1;min-width:0;height:42px;border:1.5px solid var(--line);border-radius:8px;padding:0 8px;font-size:15px}
+
+/* ================= 电脑端（窗口宽度 ≥ 1000px 时） =================
+   墨黑 + 混凝土灰 + 一点安全黄；货位号和数量用窄体数字，像货架标牌 */
+.chip b, .dmeta, #pane{display:none}
+body.wide{--canvas:#E4E6E5;--hair:#D3D8D6;--hair2:#E6E9E8;--ink2:#2B3438;--mute:#6E777B;--signal:#F2C230;
+  --num:"Barlow Semi Condensed","Bahnschrift","DIN Alternate",var(--cnf);--cnf:"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  background:var(--canvas);font-size:14px}
+body.wide header.top{position:fixed;left:0;right:0;top:0;height:64px;background:var(--canvas);color:var(--ink);border-bottom:1px solid var(--hair);padding:0 32px;gap:16px}
+body.wide header.top h1{font-size:19px;letter-spacing:2px;width:96px}
+body.wide .sync{flex:none;margin-left:auto;color:var(--mute);font-size:13px}
+body.wide .me{background:none;color:var(--ink2);font-size:13px;max-width:none;padding:0 4px}
+body.wide nav.tabs{top:0;bottom:auto;left:140px;right:auto;height:64px;background:none;border:0;gap:6px;z-index:31;padding:0}
+body.wide nav.tabs button{flex:none;height:64px;padding:0 14px;font-size:15px;color:var(--mute)}
+body.wide nav.tabs button.on{color:var(--ink);font-weight:600}
+body.wide nav.tabs button.on::before{top:auto;bottom:-1px;left:14px;right:14px;height:2px;border-radius:0;background:var(--ink)}
+body.wide .badge{position:static;display:inline-grid;margin-left:5px;background:var(--signal);color:var(--ink);border-radius:3px;min-width:0;height:17px;font:600 12px var(--num);padding:0 5px;vertical-align:2px}
+body.wide main{max-width:none;padding:86px 32px 40px}
+body.wide.v-stock main{padding:76px 472px 40px 240px}
+body.wide .banner{max-width:900px}
+/* 分类索引 */
+body.wide .chips{position:fixed;left:32px;top:96px;width:180px;flex-direction:column;gap:0;padding:0;overflow:visible}
+body.wide .chips::before{content:"分类";font-size:12.5px;color:var(--mute);margin-bottom:10px}
+body.wide .chip{display:flex;justify-content:space-between;align-items:baseline;height:auto;padding:8px 18px 8px 0;border:0;background:none;color:var(--ink2);font-size:14px;border-radius:0;text-align:left}
+body.wide .chip b{display:inline;font:500 13px var(--num);color:var(--mute)}
+body.wide .chip.on{background:none;font-weight:600;color:var(--ink)}
+body.wide .chip.on span{box-shadow:inset 0 -6px 0 rgba(242,194,48,.55)}
+/* 搜索 + 工具条 */
+body.wide .searchbar{top:64px;padding:14px 0 0;background:var(--canvas);gap:16px}
+body.wide .searchbar input{height:44px;border:0;border-bottom:1.5px solid var(--ink);border-radius:0;background:transparent;padding:0 2px;font-size:16px}
+body.wide .selbtn{height:auto;border:0;background:none;padding:0;color:var(--ink2);font-weight:500;align-self:center}
+body.wide .selbtn.on{background:none;color:var(--ink);font-weight:700}
+body.wide .dmeta{display:flex;justify-content:space-between;align-items:center;margin:12px 0 2px;color:var(--mute);font-size:13px}
+body.wide .dmeta .dacts{display:flex;gap:20px}
+body.wide .dmeta button{color:var(--ink2);font-size:13.5px}
+body.wide .dmeta button.add{color:var(--ink);font-weight:700}
+body.wide .fab{display:none}
+/* 清单表格 */
+.dtable{width:100%;border-collapse:collapse;table-layout:fixed}
+.dtable col.c-code{width:128px}.dtable col.c-model{width:120px}.dtable col.c-shelf{width:92px}.dtable col.c-q{width:84px}.dtable col.c-l{width:52px}.dtable col.c-ck{width:34px}
+html.wide{background:#E4E6E5}
+.dtable th{text-align:left;font-weight:500;font-size:12.5px;color:var(--mute);padding:10px 8px;border-bottom:1px solid var(--hair);white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:122px;background:var(--canvas);z-index:2}
+.dtable th.r{text-align:right}
+.dtable th.on{color:var(--ink)}
+.dtable th.on::after{content:" ↓"}.dtable th.on.asc::after{content:" ↑"}
+.dtable td{padding:0 8px;height:44px;border-bottom:1px solid var(--hair2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.dtable tr:hover td{background:rgba(255,255,255,.4)}
+.dtable tr.sel td{background:rgba(255,255,255,.75)}
+.dtable tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--signal)}
+.dtable tr.picked td{background:#EAF1FA}
+.dtable .tn{font-weight:600;font-size:14.5px}.dtable .tn small{font-weight:400;color:var(--mute);font-size:12.5px;margin-left:10px}
+.dtable .tc{font:500 15px var(--num);letter-spacing:.5px;color:var(--ink2)}
+.dtable .tm{color:var(--mute);font-size:13px}
+.dtable .ts{font:600 15px var(--num);letter-spacing:1px}
+.dtable .tq{text-align:right;font:600 19px var(--num)}.dtable .tq i{font:400 12px var(--cnf);color:var(--mute);margin-left:4px;font-style:normal}
+.dtable .tl{text-align:right;font:500 15px var(--num);color:var(--mute)}
+.dtable .tck{width:34px}.dtable .tck span{width:18px;height:18px;border:1.5px solid var(--hair);border-radius:4px;display:grid;place-items:center;font-size:12px;color:#fff;background:#fff}
+.dtable tr.picked .tck span{background:var(--ink);border-color:var(--ink)}
+.dtable .flag{font-size:12px;color:var(--red);margin-left:8px;font-weight:500}
+/* 右侧详情：浮起的纸面 */
+body.wide.v-stock #pane{display:flex;flex-direction:column;position:fixed;top:80px;right:20px;bottom:20px;width:420px;z-index:20;
+  background:rgba(250,251,250,.94);backdrop-filter:blur(18px) saturate(1.1);-webkit-backdrop-filter:blur(18px) saturate(1.1);
+  border:1px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 30px 60px -20px rgba(18,23,25,.28),0 2px 6px rgba(18,23,25,.06);padding:26px 28px;overflow-y:auto}
+#pane>*{flex-shrink:0}
+#pane .pempty{margin:auto;text-align:center;color:var(--mute);font-size:14px;line-height:1.8}
+#pane .pk{font-size:12.5px;color:var(--mute)}
+#pane h2{margin:6px 0 2px;font-size:26px;font-weight:700;line-height:1.25}
+#pane .pc{font:500 17px var(--num);letter-spacing:.8px;color:var(--ink2);word-break:break-all}
+#pane .plate{margin:20px 0 0;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;padding:16px 0 14px;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--hair)}
+#pane .lbl{font-size:12px;color:var(--mute);margin-bottom:2px}
+#pane .big{font:600 60px/.95 var(--num);letter-spacing:1px;word-break:break-all}
+#pane .big small{font:500 22px var(--cnf);margin-left:3px}
+#pane .big.neg{color:var(--red)}
+#pane .stock{text-align:right}#pane .u{font-size:13px;color:var(--mute);margin-top:4px}
+#pane .wh{font-size:12.5px;color:var(--mute);margin-top:6px}
+#pane .pop{display:grid;grid-template-columns:132px 1fr;gap:10px;margin-top:18px}
+#pane .stepper{gap:0;border:1px solid var(--hair);border-radius:8px;background:#fff;height:42px}
+#pane .stepper button{width:36px;height:40px;background:none;font-size:20px;color:var(--mute)}
+#pane .stepper input{height:40px;border:0;font:600 18px var(--num);min-width:0}
+#pane #person{height:42px;border:1px solid var(--hair);border-radius:8px;padding:0 12px;font-size:14px;background:#fff;width:100%}
+#pane .pbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+#pane .pb{height:44px;border-radius:8px;font-weight:600;font-size:15px}
+#pane .pb.in{background:var(--ink);color:#fff}#pane .pb.out{background:#fff;border:1.5px solid var(--ink);color:var(--ink)}
+#pane .plinks{display:flex;gap:20px;margin-top:12px;font-size:13.5px}#pane .plinks button{color:var(--ink2)}#pane .plinks .del{color:var(--red);margin-left:auto}
+#pane .facts{margin-top:20px;display:grid;grid-template-columns:76px 1fr;row-gap:8px;font-size:13px}#pane .facts dt{color:var(--mute)}#pane .facts dd{margin:0;color:var(--ink2);word-break:break-all}
+#pane .photo{margin:18px 0 0;border-radius:10px;background:linear-gradient(135deg,#E6E9E8,#D9DEDC);border:1px solid var(--hair2)}
+#pane .photo.none{height:84px}
+#pane .sec{margin-top:18px}#pane .sec h3{font-size:12.5px;font-weight:500}
+#pane .kv{grid-template-columns:76px 1fr}#pane .kv div{font-size:13px;padding:6px 0}
+#pane .mini{font-size:13px}
+#pane .warnbox{margin-top:12px}
+/* 其他页面 */
+body.wide .list:not(.dtable){max-width:980px}
+body.wide .h{max-width:980px}
+body.wide .card{background:#F6F7F6;border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 8px 20px -14px rgba(18,23,25,.35);padding:16px 18px}
+body.wide .btn{height:40px;font-size:14.5px;border-radius:8px}
+body.wide .btn.sm{height:34px;font-size:13.5px}
+body.wide .btn.pri{background:var(--ink)}
+body.wide .reqgrid{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"a b" "c b";column-gap:32px;align-items:start}
+body.wide .reqgrid>.ra{grid-area:a}body.wide .reqgrid>.rb{grid-area:b}body.wide .reqgrid>.rc{grid-area:c}
+body.wide .menu{max-width:620px}
+body.wide .rec{min-height:52px}
+/* 弹窗变成屏幕中间的对话框 */
+body.wide .mask{align-items:center}
+body.wide .sheet{max-width:560px;max-height:86vh;border-radius:14px;animation:none;padding:22px 26px 24px}
+body.wide .toast{bottom:28px}
+body.wide .cartbar{left:auto;right:470px;width:380px;bottom:24px}
+body.wide .selbar{left:auto;right:470px;width:460px;bottom:24px}
+body.wide:not(.v-stock) .selbar,body.wide:not(.v-stock) .cartbar{right:32px}
 </style>
 </head>
 <body>
@@ -190,6 +300,7 @@ table.pv th,table.pv td{border-bottom:1px solid var(--soft);padding:6px 4px;text
 </header>
 <main id="main"></main>
 <div id="float"></div>
+<aside id="pane"></aside>
 <nav class="tabs" id="tabs"></nav>
 <datalist id="peopleList"></datalist>
 <datalist id="catList"></datalist>
@@ -209,7 +320,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 e';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 f';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -418,12 +529,13 @@ let rq = false;
 function render() { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; doRender(); }); }
 function doRender() {
   renderTop(); renderTabs(); renderLists(); if (DESK) deskTick();
+  document.body.classList.toggle('v-stock', S.view === 'stock');
   const main = $('#main'); const ae = document.activeElement;
   if (S.view !== 'stock' && ae && main.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) { S.dirty = true; renderFloat(); return; }
   if (S.view === 'stock') {
     if (!$('#stockShell')) { main.innerHTML = stockShell(); bindStock(); }
     $('#bannerBox').innerHTML = banners();
-    renderChips(); renderItems();
+    renderChips(); renderItems(); refreshPane();
   } else {
     const V = { req: viewReq, lend: viewLend, rec: viewRec, more: viewMore }[S.view];
     main.innerHTML = banners() + (V ? V() : '');
@@ -433,6 +545,15 @@ function doRender() {
 }
 document.addEventListener('focusout', () => { if (S.dirty) { S.dirty = false; setTimeout(render, 50); } });
 
+// 电脑端右侧详情：数据变了就刷新（正在里面打字时不刷新）
+function refreshPane() {
+  if (!S.wide) return;
+  const pane = $('#pane'); if (!pane) return;
+  const it = S.paneId && item(S.paneId);
+  if (!it || it.deleted) { S.paneId = null; pane.innerHTML = `<div class="pempty">${S.items.length ? '点左边清单里的一行<br>在这里查看、入库、出库' : '还没有物品'}</div>`; return; }
+  const ae = document.activeElement; if (ae && pane.contains(ae) && /INPUT|TEXTAREA/.test(ae.tagName)) return;
+  openItem(S.paneId);
+}
 function renderTop() {
   const el = $('#sync'); let cls = '', txt = '';
   if (!DB) { txt = '连接中…'; }
@@ -490,11 +611,18 @@ function renderLists() {
 function stockShell() {
   return `<div id="stockShell"><div id="bannerBox"></div>
     <div class="searchbar"><input id="q" type="search" enterkeyhint="search" placeholder="搜名称、配件编号、货位" value="${esc(S.q)}" autocomplete="off">${isKeeper() ? `<button class="selbtn ${S.sel ? 'on' : ''}" id="selBtn">${S.sel ? '取消' : '选择'}</button>` : ''}</div>
-    <div class="chips" id="chips"></div><div id="itemList"></div></div>`;
+    <div class="chips" id="chips"></div>
+    <div class="dmeta"><span id="dcount"></span><div class="dacts">${isKeeper() ? '<button data-act="import">导入</button><button data-act="expStock">导出</button><button data-act="newItem" class="add">＋ 新物品</button>' : '<button data-act="expStock">导出</button>'}</div></div>
+    <div id="itemList"></div></div>`;
 }
 function bindStock() {
   $('#q').addEventListener('input', e => { S.q = e.target.value; renderItems(); });
   $('#chips').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; S.cat = b.dataset.cat; renderChips(); renderItems(); });
+  $('#itemList').addEventListener('click', e => {
+    const th = e.target.closest('[data-sort]'); if (!th) return;
+    const k = th.dataset.sort; S.sort = S.sort && S.sort.k === k ? (S.sort.asc ? { k: '' } : { k, asc: true }) : { k, asc: k !== 'stock' && k !== 'lent' };
+    renderItems();
+  });
   const sb = $('#selBtn'); if (sb) sb.onclick = () => setSel(S.sel ? null : new Set());
   // 长按某一行进入多选
   const il = $('#itemList'); let lp = null, sx = 0, sy = 0;
@@ -516,7 +644,8 @@ function setSel(v) {
 function renderChips() {
   const list = ['全部', ...(S.items.some(i => (i.stock || 0) < 0) ? ['库存为负'] : []), ...(S.items.some(i => i.returnable) ? ['需归还'] : []), ...cats()];
   if (!list.includes(S.cat)) S.cat = '全部';
-  $('#chips').innerHTML = list.map(c => `<button class="chip ${c === S.cat ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
+  const cnt = c => c === '全部' ? S.items.length : c === '库存为负' ? S.items.filter(i => (i.stock || 0) < 0).length : c === '需归还' ? S.items.filter(i => i.returnable).length : S.items.filter(i => i.category === c).length;
+  $('#chips').innerHTML = list.map(c => `<button class="chip ${c === S.cat ? 'on' : ''}" data-cat="${esc(c)}"><span>${esc(c)}</span><b>${cnt(c)}</b></button>`).join('');
 }
 function matchQ(it, q) {
   if (!q) return true;
@@ -529,7 +658,27 @@ function filteredItems() {
     if (S.cat === '需归还' && !it.returnable) return false;
     if (!['全部', '库存为负', '需归还'].includes(S.cat) && it.category !== S.cat) return false;
     return matchQ(it, S.q.trim());
-  }).sort((a, b) => (b.lu || b.t || 0) - (a.lu || a.t || 0));
+  }).sort(itemSorter());
+}
+const SORTS = { name: i => i.name || '', code: i => i.code || '', model: i => i.model || i.category || '', shelf: i => i.shelf || '', stock: i => Number(i.stock) || 0, lent: i => Number(i.lent) || 0 };
+function itemSorter() {
+  const k = S.sort && S.sort.k;
+  if (!k || !SORTS[k]) return (a, b) => (b.lu || b.t || 0) - (a.lu || a.t || 0);
+  const f = SORTS[k], d = S.sort.asc ? 1 : -1;
+  return (a, b) => { const x = f(a), y = f(b);
+    if (typeof x !== 'number' && (!x) !== (!y)) return x ? -1 : 1;  // 空的永远排在最后
+    const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'zh', { numeric: true }); return c * d || (b.lu || 0) - (a.lu || 0); };
+}
+function deskTable(list) {
+  const th = (k, t, cls = '') => `<th data-sort="${k}" class="${cls} ${S.sort && S.sort.k === k ? 'on' + (S.sort.asc ? ' asc' : '') : ''}">${t}</th>`;
+  const anyLent = S.items.some(i => i.returnable);
+  return `<table class="dtable"><colgroup>${S.sel ? '<col class="c-ck">' : ''}<col><col class="c-code"><col class="c-model"><col class="c-shelf"><col class="c-q">${anyLent ? '<col class="c-l">' : ''}</colgroup><thead><tr>${S.sel ? '<th class="tck"></th>' : ''}${th('name', '名称 / 规格')}${th('code', '配件编号')}${th('model', '适用机型 / 分类')}${th('shelf', '货位')}${th('stock', '在库', 'r')}${anyLent ? th('lent', '借出', 'r') : ''}</tr></thead><tbody>${list.map(it => {
+    const picked = S.sel && S.sel.has(it.id);
+    return `<tr data-item="${it.id}" class="${it.id === S.paneId ? 'sel' : ''} ${picked ? 'picked' : ''}">${S.sel ? `<td class="tck"><span>${picked ? '✓' : ''}</span></td>` : ''}
+      <td class="tn">${esc(it.name)}${it.spec ? `<small>${esc(it.spec)}</small>` : ''}${it.badQty ? '<span class="flag">数量待核</span>' : ''}</td>
+      <td class="tc">${esc(it.code || '')}</td><td class="tm">${esc(it.model || it.category || '')}</td><td class="ts">${esc(it.shelf || '')}</td>
+      <td class="tq ${(it.stock || 0) < 0 ? 'neg' : ''}">${fmt(it.stock)}<i>${esc(it.unit || '')}</i></td>${anyLent ? `<td class="tl">${it.returnable && it.lent ? fmt(it.lent) : ''}</td>` : ''}</tr>`;
+  }).join('')}</tbody></table>`;
 }
 function thumb(it, cls = 'thumb') {
   const key = it.id + ':' + (it.pv || 0);
@@ -556,9 +705,11 @@ function renderItems() {
   } else if (!list.length) {
     el.innerHTML = `<div class="empty">没有找到${S.q ? `「${esc(S.q)}」` : '符合条件的物品'}。${isKeeper() ? '<br><button class="link" data-act="newItemQ">新建这样物品</button>' : ''}</div>`;
   } else {
-    el.innerHTML = `<div class="list">${list.map(rowHtml).join('')}</div><p class="foot">共 ${list.length} 样</p>${S.sel ? '<div style="height:64px"></div>' : ''}`;
+    el.innerHTML = S.wide ? deskTable(list) + (S.sel ? '<div style="height:80px"></div>' : '')
+      : `<div class="list">${list.map(rowHtml).join('')}</div><p class="foot">共 ${list.length} 样</p>${S.sel ? '<div style="height:64px"></div>' : ''}`;
   }
   observePhotos(el);
+  const dc = $('#dcount'); if (dc) dc.textContent = `${list.length} 样${S.sort && S.sort.k ? '　·　按' + ({ name: '名称', code: '配件编号', model: '机型', shelf: '货位', stock: '在库', lent: '借出' }[S.sort.k]) + '排序' : '　·　最近动过的在前'}`;
 }
 function renderFloat() {
   let h = '';
@@ -683,17 +834,46 @@ function openItem(id) {
   const basic = kv([['规格', it.spec], ['适用机型', it.model], ['分类', it.category], ['别名', it.alias], ['单位', it.unit], ['入库时间', it.inDate]]);
   const extra = kv((it.extra || []).map(e => [e.k, e.v]));
   const srcH = it.src ? kv([['文件', it.src.file], ['工作表', it.src.sheet], ['原表行号', (it.src.rows || []).join('、')]]) : '';
+  const usesH = `<div class="sec"><h3>最近领用</h3>${uses.length ? uses.map(r => `<div class="mini"><span>${esc(r.person || '未填领用人')}　${fmt(r.qty)} ${esc(r.unit || '')}${r.type === 'lend' ? '（借）' : ''}</span><span>${fmtT(r.t)}</span></div>`).join('') : '<div class="mini"><span>还没有领用记录</span></div>'}</div>`;
+  const lendH = (it.returnable || lastLend) ? `<div class="sec"><h3>最后一次借出</h3>${lastLend ? `<div class="mini"><span>${esc(lastLend.person || '未填')}　${fmt(lastLend.qty)} ${esc(lastLend.unit || '')}　${lastLend.open ? `<span class="tag y">未还 ${fmt(lastLend.qty - lastLend.returned)}</span>` : '<span class="tag g">已还清</span>'}</span><span>${fmtT(lastLend.t)}</span></div>` : '<div class="mini"><span>还没有借出记录</span></div>'}</div>` : '';
+  if (S.wide && S.view === 'stock') {
+    const pane = $('#pane'); const keep = S.paneId === id ? pane.scrollTop : 0; S.paneId = id;
+    const sm = String(it.shelf || '—').match(/^([0-9A-Za-z\-\.\/#]+)(.*)$/) || [0, it.shelf || '—', ''];
+    const pkey = it.id + ':' + (it.pv || 0); const psrc = it.hasPhoto && photoCache.get(pkey);
+    pane.innerHTML = `<div class="pk">${esc([it.category, it.model].filter(Boolean).join(' · ')) || '&nbsp;'}${it.returnable ? '　·　需归还' : ''}</div>
+      <h2>${esc(it.name)}</h2>${(it.code || it.spec) ? `<div class="pc">${esc([it.code, it.spec].filter(Boolean).join('　'))}</div>` : ''}
+      <div class="plate"><div><div class="lbl">货位</div><div class="big">${esc(sm[1])}${sm[2] ? `<small>${esc(sm[2])}</small>` : ''}</div>${(it.warehouse || it.place) ? `<div class="wh">${esc([it.warehouse, it.place].filter(Boolean).join(' · '))}</div>` : ''}</div>
+        <div class="stock"><div class="lbl">在库</div><div class="big ${(it.stock || 0) < 0 ? 'neg' : ''}">${fmt(it.stock)}</div><div class="u">${esc(it.unit || '')}${it.returnable ? `　借出 ${fmt(it.lent)}${(it.broken || 0) > 0 ? '　损坏 ' + fmt(it.broken) : ''}` : ''}</div></div></div>
+      ${it.badQty ? `<div class="warnbox">导入时原表数量不是数字，先按 0 记的，请盘点后改正。</div>` : ''}
+      ${k ? `<div class="pop">${stepper('q', 1)}<input id="person" list="peopleList" placeholder="领用人（出库时填）"></div>
+        <div class="pbtns"><button class="pb in" id="bIn">入库</button><button class="pb out" id="bOut">${it.returnable ? '借出' : '出库'}</button></div>
+        <div class="plinks"><button id="bAdj">盘点</button><button id="bEdit">编辑</button><button id="bMerge">合并</button><button class="del" id="bDel">删除</button></div>` : ''}
+      ${u ? `<div class="pop">${stepper('q', 1)}<button class="pb in" id="bCart">加入申报清单</button></div>` : ''}
+      ${(it.model || it.alias || it.inDate || it.category) ? `<dl class="facts">${[['适用机型', it.model], ['分类', it.category], ['别名', it.alias], ['入库时间', it.inDate]].filter(p => p[1]).map(p => `<dt>${p[0]}</dt><dd>${esc(p[1])}</dd>`).join('')}</dl>` : ''}
+      <div class="photo ${psrc ? 'has' : it.hasPhoto ? '' : 'none'}" id="ph">${psrc ? `<img src="${psrc}" alt="" data-view>` : it.hasPhoto ? '' : (k ? '还没有照片' : '没有照片')}
+        ${k ? `<label class="cam">${it.hasPhoto ? '换照片' : '拍照 / 上传'}${camInput('id="camIn"')}</label>` : ''}</div>
+      ${usesH}${lendH}
+      ${extra ? `<div class="sec"><h3>原表其他信息</h3><div class="kv">${extra}</div></div>` : ''}
+      ${srcH ? `<div class="sec"><h3>导入来源</h3><div class="kv">${srcH}</div></div>` : ''}`;
+    pane.scrollTop = keep;
+    document.querySelectorAll('.dtable tr.sel').forEach(r => r.classList.remove('sel'));
+    const tr = document.querySelector(`.dtable tr[data-item="${id}"]`); if (tr) tr.classList.add('sel');
+    mountItem(pane, it, k, u, !psrc);
+    return;
+  }
   const sh = openSheet(`${head(esc(it.name), esc([it.returnable ? '需归还' : ''].filter(Boolean).join('')))}
     ${it.code ? `<div class="code">${esc(it.code)}</div>` : ''}
     ${where}${stats}${it.badQty ? `<div class="warnbox">导入时原表数量不是数字，先按 0 记的，请盘点后改正。</div>` : ''}${keeperBox}${userBox}
     ${basic ? `<div class="sec"><h3>基本信息</h3><div class="kv">${basic}</div></div>` : ''}
     ${photo}
-    <div class="sec"><h3>最近领用</h3>${uses.length ? uses.map(r => `<div class="mini"><span>${esc(r.person || '未填领用人')}　${fmt(r.qty)} ${esc(r.unit || '')}${r.type === 'lend' ? '（借）' : ''}</span><span>${fmtT(r.t)}</span></div>`).join('') : '<div class="mini"><span>还没有领用记录</span></div>'}</div>
+    ${usesH}
     <div class="sec"><h3>最后一次借出</h3>${lastLend ? `<div class="mini"><span>${esc(lastLend.person || '未填')}　${fmt(lastLend.qty)} ${esc(lastLend.unit || '')}　${lastLend.open ? `<span class="tag y">未还 ${fmt(lastLend.qty - lastLend.returned)}</span>` : '<span class="tag g">已还清</span>'}</span><span>${fmtT(lastLend.t)}</span></div>` : '<div class="mini"><span>还没有借出记录</span></div>'}</div>
     ${extra ? `<div class="sec"><h3>原表其他信息</h3><div class="kv">${extra}</div></div>` : ''}
     ${srcH ? `<div class="sec"><h3>导入来源</h3><div class="kv">${srcH}</div></div>` : ''}`,
-  sh => {
-    if (it.hasPhoto) loadPhoto(it.id, it.pv).then(src => { const ph = sh.querySelector('#ph'); if (src && ph) { ph.classList.add('has'); ph.classList.remove('none'); ph.insertAdjacentHTML('afterbegin', `<img src="${src}" alt="" data-view>`); } });
+  sh => mountItem(sh, it, k, u, true));
+}
+function mountItem(sh, it, k, u, needPhoto) {
+    if (it.hasPhoto && needPhoto) loadPhoto(it.id, it.pv).then(src => { const ph = sh.querySelector('#ph'); if (src && ph && !ph.querySelector('img')) { ph.classList.add('has'); ph.classList.remove('none'); ph.insertAdjacentHTML('afterbegin', `<img src="${src}" alt="" data-view>`); } });
     const cam = sh.querySelector('#camIn');
     if (cam) cam.onchange = async () => { const f = cam.files[0]; if (!f) return; const src = await compress(f); savePhoto(it, src); toast('照片已保存'); openItem(it.id); };
     const qv = () => readNum(sh.querySelector('[name=q]').value);
@@ -720,7 +900,6 @@ function openItem(id) {
       const ex = cart.find(c => c.itemId === it.id); if (ex) ex.qty = r3(ex.qty + q); else cart.push({ itemId: it.id, qty: q });
       saveCart(); closeSheet(); render(); toast(`已加入申报清单：${it.name} ${fmt(q)} ${it.unit || ''}`);
     };
-  });
 }
 
 function openAdjust(it) {
@@ -879,11 +1058,11 @@ function viewReq() {
     const pend = S.reqs.filter(r => r.kind === 'use' && r.status === 'pending');
     const buys = S.reqs.filter(r => r.kind === 'buy').slice(0, 30);
     const done = S.reqs.filter(r => r.kind === 'use' && r.status !== 'pending').slice(0, 20);
-    return `<div class="h"><h2>待处理领用（${pend.length}）</h2></div>
-      ${pend.length ? pend.map(r => useCard(r, true)).join('') : '<div class="card empty" style="padding:20px">没有待处理的领用申报</div>'}
-      <div class="h"><h2>采购申报</h2><button class="btn sm pri" data-act="newBuy">＋ 新建</button></div>
+    return `<div class="reqgrid"><div class="ra"><div class="h"><h2>待处理领用（${pend.length}）</h2></div>
+      ${pend.length ? pend.map(r => useCard(r, true)).join('') : '<div class="card empty" style="padding:20px">没有待处理的领用申报</div>'}</div>
+      <div class="rb"><div class="h"><h2>采购申报</h2><button class="btn sm pri" data-act="newBuy">＋ 新建</button></div>
       ${buys.length ? buys.map(r => buyCard(r, canReceive(r) ? `<button class="btn in sm" data-act="stockBuy" data-id="${r.id}">收货入库</button>` : '')).join('') : '<div class="card empty" style="padding:20px">还没有采购申报</div>'}
-      ${done.length ? `<div class="h"><h2>已处理的领用</h2></div>${done.map(r => useCard(r, false)).join('')}` : ''}`;
+      </div><div class="rc">${done.length ? `<div class="h"><h2>已处理的领用</h2></div>${done.map(r => useCard(r, false)).join('')}` : ''}</div></div>`;
   }
   if (role === 'buyer') {
     const buys = S.reqs.filter(r => r.kind === 'buy');
@@ -1674,6 +1853,35 @@ $('#main').addEventListener('click', e => {
   const f = ACT[b.dataset.act]; if (f) f(b.dataset.id, b);
 });
 
+// 电脑端：窗口够宽就换成桌面排版
+const WQ = matchMedia('(min-width: 1000px)');
+function applyWide() {
+  S.wide = WQ.matches; document.body.classList.toggle('wide', S.wide); document.documentElement.classList.toggle('wide', S.wide);
+  if (!S.wide) { S.paneId = null; $('#pane').innerHTML = ''; }
+  $('#main').innerHTML = ''; render();
+}
+WQ.addEventListener ? WQ.addEventListener('change', applyWide) : WQ.addListener(applyWide);
+S.wide = WQ.matches; document.body.classList.toggle('wide', S.wide); document.documentElement.classList.toggle('wide', S.wide);
+document.addEventListener('keydown', e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
+  if (e.key === 'Escape') {
+    if (document.querySelector('.viewer')) { document.querySelector('.viewer').remove(); return; }
+    if (document.querySelector('.mask .x')) { closeSheet(); return; }
+    if (S.sel) { setSel(null); return; }
+    if (typing) document.activeElement.blur();
+    return;
+  }
+  if (!S.wide || S.view !== 'stock' || document.querySelector('.mask')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); const q = $('#q'); if (q) { q.focus(); q.select(); } return; }
+  if (typing && document.activeElement.id !== 'q') return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const list = filteredItems(); if (!list.length) return; e.preventDefault();
+    let i = list.findIndex(x => x.id === S.paneId); i = i < 0 ? 0 : Math.min(list.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    if (document.activeElement.id === 'q') document.activeElement.blur();
+    openItem(list[i].id);
+    const tr = document.querySelector(`.dtable tr[data-item="${list[i].id}"]`); if (tr) tr.scrollIntoView({ block: 'nearest' });
+  }
+});
 // 点照片全屏看
 document.addEventListener('click', e => {
   if (e.target.closest('.cam') || (S.sel && e.target.closest('.row'))) return;

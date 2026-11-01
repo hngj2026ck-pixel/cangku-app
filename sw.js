@@ -1,6 +1,6 @@
 // 仓库软件的离线缓存：页面用"先联网、没网用缓存"，第三方库用"先缓存"
-const CACHE = 'cangku-v2';
-const LIBS = ['www.gstatic.com', 'cdn.sheetjs.com', 'cdnjs.cloudflare.com'];
+const CACHE = 'cangku-v3';
+const LIBS = ['www.gstatic.com', 'cdn.sheetjs.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html']).catch(() => {}))); });
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {

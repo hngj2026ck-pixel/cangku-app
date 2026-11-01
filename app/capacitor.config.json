@@ -3,7 +3,7 @@
   "appName": "仓库",
   "webDir": "www",
   "server": {
-    "url": "https://hngj2026ck-pixel.github.io/cangku/",
+    "url": "https://hngj2026ck-pixel.github.io/cangku-app/",
     "errorPath": "offline.html"
   },
   "android": {

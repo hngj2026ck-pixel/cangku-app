@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cangkuDesktop', {
   isDesktop: true,
   setPending: n => ipcRenderer.send('pending', n),
+  setTitleBar: o => ipcRenderer.send('titlebar', o),
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
   saveFile: (name, b64) => ipcRenderer.invoke('save-file', { name, b64 }),
   backupDone: (name, b64) => ipcRenderer.send('backup-done', { name, b64 }),

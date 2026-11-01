@@ -28,7 +28,9 @@ function showWin(view) {
 function createWindow(hidden) {
   win = new BrowserWindow({
     width: 1100, height: 780, minWidth: 420, minHeight: 600, show: !hidden, title: '仓库',
-    icon: path.join(BUILD, 'icon.png'), backgroundColor: '#E9ECEA', autoHideMenuBar: true,
+    icon: path.join(BUILD, 'icon.png'), backgroundColor: '#E4E6E5', autoHideMenuBar: true,
+    // 无边框：去掉 Windows 标题栏，最小化/最大化/关闭按钮画在网页顶栏右边
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#E4E6E5', symbolColor: '#2B3438', height: 64 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   win.setMenu(null);
@@ -89,6 +91,7 @@ ipcMain.on('backup-done', (_e, { name, b64 }) => {
 ipcMain.on('backup-failed', (_e, msg) => { if (manualBackup) new Notification({ title: '备份失败', body: msg }).show(); manualBackup = false; });
 
 // ---------- 网页传来的事件 ----------
+ipcMain.on('titlebar', (_e, o) => { try { if (win) win.setTitleBarOverlay(o); } catch (e) {} });
 ipcMain.on('pending', (_e, n) => { if (n !== pending) { pending = n; updateTray(); if (win) win.setTitle(n > 0 ? `仓库（${n} 条待处理）` : '仓库'); } });
 ipcMain.on('notify', (_e, { title, body }) => {
   const n = new Notification({ title, body, icon: path.join(BUILD, 'icon.png') });

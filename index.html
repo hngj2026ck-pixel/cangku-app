@@ -25,6 +25,10 @@ header.top{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;hei
 .top h1{font-size:18px;margin:0;font-weight:700}
 .sync{display:flex;align-items:center;gap:6px;font-size:12px;color:#B9C6CC;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sync i{width:8px;height:8px;border-radius:50%;background:#8a979c;flex:none}
+button.sync{text-align:left;color:#B9C6CC;font-size:12px}
+.sync em{font-style:normal;font-size:14px;opacity:.75;margin-left:2px}
+.sync.spin em{display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .sync.ok i{background:#4CC27A}.sync.off i{background:var(--yel)}.sync.err i{background:#ff6b5b}
 .me{background:rgba(255,255,255,.14);border-radius:999px;height:32px;padding:0 12px;font-size:14px;color:#fff;white-space:nowrap;max-width:42vw;overflow:hidden;text-overflow:ellipsis}
 
@@ -272,6 +276,12 @@ body.wide.v-stock #pane{display:flex;flex-direction:column;position:fixed;top:80
 #pane .kv{grid-template-columns:76px 1fr}#pane .kv div{font-size:13px;padding:6px 0}
 #pane .mini{font-size:13px}
 #pane .warnbox{margin-top:12px}
+/* 电脑端软件（无边框窗口）：顶栏可以拖动窗口，右边给 最小化/最大化/关闭 按钮留位置 */
+body.desk header.top{-webkit-app-region:drag;padding-right:150px}
+body.desk header.top button, body.desk nav.tabs{-webkit-app-region:no-drag}
+body.wide ::-webkit-scrollbar{width:8px;height:8px}
+body.wide ::-webkit-scrollbar-thumb{background:rgba(18,23,25,.18);border-radius:4px}
+body.wide ::-webkit-scrollbar-track{background:transparent}
 /* 其他页面 */
 body.wide .list:not(.dtable){max-width:980px}
 body.wide .h{max-width:980px}
@@ -295,7 +305,7 @@ body.wide:not(.v-stock) .selbar,body.wide:not(.v-stock) .cartbar{right:32px}
 <body>
 <header class="top">
   <h1>仓库</h1>
-  <div class="sync" id="sync"><i></i><span>连接中…</span></div>
+  <button class="sync" id="sync" title="点一下刷新：拿到最新版本和最新数据"><i></i><span>连接中…</span><em>↻</em></button>
   <button class="me" id="meBtn" aria-label="切换身份">选择身份</button>
 </header>
 <main id="main"></main>
@@ -320,7 +330,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 f';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 g';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -591,6 +601,12 @@ function renderTabs() {
 }
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; S.view = b.dataset.tab; S.sel = null; scrollTo(0, 0); doRender(); });
 $('#meBtn').addEventListener('click', () => openIdentity(false));
+// 点"已同步"刷新：先检查有没有新版本，再重新加载页面（数据会重新从云端拿一遍）
+$('#sync').addEventListener('click', async () => {
+  const el = $('#sync'); el.classList.add('spin'); el.querySelector('span').textContent = '正在刷新…';
+  try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) {}
+  setTimeout(() => location.reload(), 300);
+});
 
 function people() {
   const s = new Set();
@@ -1857,11 +1873,19 @@ $('#main').addEventListener('click', e => {
 const WQ = matchMedia('(min-width: 1000px)');
 function applyWide() {
   S.wide = WQ.matches; document.body.classList.toggle('wide', S.wide); document.documentElement.classList.toggle('wide', S.wide);
+  deskTitle();
   if (!S.wide) { S.paneId = null; $('#pane').innerHTML = ''; }
   $('#main').innerHTML = ''; render();
 }
 WQ.addEventListener ? WQ.addEventListener('change', applyWide) : WQ.addListener(applyWide);
 S.wide = WQ.matches; document.body.classList.toggle('wide', S.wide); document.documentElement.classList.toggle('wide', S.wide);
+// 电脑端：窗口按钮的颜色跟着顶栏换（宽屏是浅色顶栏，窄屏是深色顶栏）
+function deskTitle() {
+  if (!window.cangkuDesktop) return;
+  document.body.classList.add('desk');
+  if (window.cangkuDesktop.setTitleBar) window.cangkuDesktop.setTitleBar(S.wide ? { color: '#E4E6E5', symbolColor: '#2B3438', height: 64 } : { color: '#18252B', symbolColor: '#FFFFFF', height: 50 });
+}
+deskTitle();
 document.addEventListener('keydown', e => {
   const typing = /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
   if (e.key === 'Escape') {

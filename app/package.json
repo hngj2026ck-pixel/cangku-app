@@ -1,0 +1,14 @@
+{
+  "name": "cangku-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "仓库软件的安卓外壳：打开线上网页，补上拍照、保存文件、返回键",
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.0",
+    "@capacitor/share": "^6.0.0"
+  }
+}

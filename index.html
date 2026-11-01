@@ -220,6 +220,9 @@ const daysSince = t => Math.max(0, Math.floor((now() - t) / 86400000));
 const readNum = v => { const n = parseFloat(String(v ?? '').replace(/，|,/g, '.').trim()); return Number.isFinite(n) ? r3(n) : NaN; };
 const clean = o => { const r = {}; for (const k in o) if (o[k] !== undefined) r[k] = o[k]; return r; };
 const isWeChat = () => /MicroMessenger/i.test(navigator.userAgent);
+// 在安卓 App（Capacitor 外壳）里运行时为 true
+const isApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const capPlugin = n => window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[n];
 
 /* ---------- 数据层：本地 / 云端 ---------- */
 function makeLocal() {
@@ -602,6 +605,19 @@ function openSheet(html, mount, lock) {
   m.addEventListener('click', e => { if (lock) return; if (e.target === m || e.target.closest('[data-close]')) closeSheet(); });
   document.body.appendChild(m);
   const sh = m.querySelector('.sheet'); observePhotos(sh); mount && mount(sh); return sh;
+}
+// App 里不能像浏览器那样下载：存到手机的「文档」里，再弹出分享（可发微信、存到文件管理）
+async function saveInApp(fname, b64) {
+  const FS = capPlugin('Filesystem'), SH = capPlugin('Share');
+  if (!FS) { alert('这个版本的 App 不支持保存文件，请更新 App'); return; }
+  let uri;
+  try {
+    const r = await FS.writeFile({ path: '仓库/' + fname, data: b64, directory: 'DOCUMENTS', recursive: true });
+    uri = r.uri; toast('已保存到 手机存储/Documents/仓库/' + fname);
+  } catch (e) {
+    const r = await FS.writeFile({ path: fname, data: b64, directory: 'CACHE' }); uri = r.uri;
+  }
+  if (SH) { try { await SH.share({ title: fname, url: uri, dialogTitle: '发送或保存表格' }); } catch (e) { /* 用户取消分享 */ } }
 }
 function closeSheet() { document.querySelectorAll('.mask').forEach(x => x.remove()); }
 const head = (title, sub) => `<div class="sh"><div><h2>${title}</h2>${sub ? `<div class="sub" style="white-space:normal">${sub}</div>` : ''}</div><button class="x" data-close aria-label="关闭">×</button></div>`;
@@ -1343,11 +1359,14 @@ function loadXLSX() {
 }
 async function writeX(rows, sheet, file) {
   if (!rows.length) return toast('没有可导出的内容');
-  if (isWeChat() && !confirm('微信里一般下载不了文件。建议点右上角「···」→「在浏览器打开」后再导出。还要继续吗？')) return;
+  if (!isApp() && isWeChat() && !confirm('微信里一般下载不了文件。建议点右上角「···」→「在浏览器打开」后再导出。还要继续吗？')) return;
   try {
     const X = await loadXLSX();
     const ws = X.utils.json_to_sheet(rows); const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, sheet);
-    X.writeFile(wb, `${file}_${fmtD(now())}.xlsx`);
+    const fname = `${file}_${fmtD(now())}.xlsx`;
+    if (isApp()) return await saveInApp(fname, X.write(wb, { type: 'base64', bookType: 'xlsx' }));
+    if (window.cangkuDesktop) return window.cangkuDesktop.saveFile(fname, X.write(wb, { type: 'base64', bookType: 'xlsx' }));
+    X.writeFile(wb, fname);
   } catch (e) { alert(e.message); }
 }
 // 表头同义词：表头按 "/" 拆开，任意一段完全对上就算（避免"装箱类别"被当成"类别"）
@@ -1604,6 +1623,19 @@ $('#main').addEventListener('click', e => {
   }
   const f = ACT[b.dataset.act]; if (f) f(b.dataset.id, b);
 });
+
+// 安卓返回键：先关弹窗，再回库存页，最后才退出
+(function appBack() {
+  const A = capPlugin('App'); if (!isApp() || !A) return;
+  A.addListener('backButton', () => {
+    if (document.querySelector('.mask')) { if (!document.querySelector('.mask .x')) return; closeSheet(); return; }
+    if (S.sel) { setSel(null); return; }
+    if (S.view !== 'stock') { S.view = 'stock'; doRender(); return; }
+    A.exitApp();
+  });
+})();
+// 离线缓存：没网时也能打开
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 boot();
 </script>

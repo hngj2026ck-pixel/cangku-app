@@ -339,7 +339,7 @@ const FIREBASE_CONFIG = {
   appId: "1:204511919854:web:f3e1360f46c62fddf33dff"
 };
 const FB_VER = '10.12.2';
-const APP_VER = '2026-11-01 i';  // 每次改代码时改这里，用来确认手机上是不是新版
+const APP_VER = '2026-11-01 j';  // 每次改代码时改这里，用来确认手机上是不是新版
 
 /* ---------- 小工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -429,7 +429,7 @@ async function makeCloud(cfg) {
 let DB;
 
 /* ---------- 状态 ---------- */
-const ROLES = { keeper: '库管员', user: '领用人', buyer: '采购', viewer: '查看者' };
+const ROLES = { keeper: '库管员', user: '领用人', buyer: '设备部', viewer: '查看者' };
 const S = {
   items: [], all: [], byId: new Map(), lends: [], reqs: [], recs: [], audit: [], settings: { returnCats: [] },
   view: 'stock', cat: '全部', q: '', lendSort: 'time',
@@ -1062,7 +1062,7 @@ function buyLine(l) {
   const renamed = !l.added && ((v.name !== l.name) || (v.spec !== (l.spec || '')));
   const nums = [];
   if (l.byKeeper) nums.push('库管员收货时新增');
-  else nums.push(l.added ? '采购新增' : `申购 ${fmt(l.qty)}`);
+  else nums.push(l.added ? '设备部新增' : `申购 ${fmt(l.qty)}`);
   if (!l.added && !l.drop && p.qty !== l.qty) nums.push(`调整为 ${fmt(p.qty)}`);
   if (l.inq) nums.push(`收货入库 ${fmt(l.inq)}`);
   const tagH = tags.map(t => `<span class="tag ${t === '不买' || t === '没收齐' ? 'r' : /新增/.test(t) ? 'b' : 'y'}">${t}</span>`).join(' ');
@@ -1073,7 +1073,7 @@ function buyLine(l) {
 }
 function buyCard(r, actions) {
   return `<div class="card"><div class="t1"><span class="who">采购申报</span><span>${stTag(r)}</span></div>
-    <div class="when">${esc(r.requester)}　${fmtT(r.t)}${r.handledBy ? `，采购 ${esc(r.handledBy)}` : ''}</div>${r.lines.map(buyLine).join('')}
+    <div class="when">${esc(r.requester)}　${fmtT(r.t)}${r.handledBy ? `，设备部 ${esc(r.handledBy)}` : ''}</div>${r.lines.map(buyLine).join('')}
     ${r.note ? `<div class="note">备注：${esc(r.note)}</div>` : ''}${(r.arrNotes || []).map(n => `<div class="note">收货备注（${fmtT(n.t)}${n.by ? '，' + esc(n.by) : ''}）：${esc(n.text)}</div>`).join('')}
     ${r.reason ? `<div class="note">拒绝原因：${esc(r.reason)}</div>` : ''}
     ${actions ? `<div class="btns">${actions}</div>` : ''}</div>`;
@@ -1112,7 +1112,7 @@ function viewReq() {
 
 function openCart() {
   const draw = () => cart.map((c, i) => { const it = item(c.itemId); return `<div class="line"><div class="mid">${esc(it ? it.name : '已删除的物品')} ${esc(it && it.spec || '')}<small>${esc(it && it.unit || '')}</small></div><input data-ci="${i}" inputmode="decimal" value="${fmt(c.qty)}"><button class="x" data-rm="${i}" aria-label="移除">×</button></div>`; }).join('') || '<div class="empty">清单是空的</div>';
-  openSheet(`${head('申报清单', '发送后你、库管员和采购能看到，由库管员处理。')}<div id="cl">${draw()}</div>
+  openSheet(`${head('申报清单', '发送后你、库管员和设备部能看到，由库管员处理。')}<div id="cl">${draw()}</div>
     <div class="field"><label>备注（可不填）</label><input id="cn" placeholder="比如：二号营地用"></div>
     <div class="btns"><button class="btn pri" id="send">发送给库管员</button></div>`, sh => {
     sh.querySelector('#cl').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return; cart.splice(+b.dataset.rm, 1); saveCart(); sh.querySelector('#cl').innerHTML = draw(); render(); });
@@ -1129,7 +1129,7 @@ function openCart() {
 
 function openNewBuy() {
   const lines = []; let pick = null, photo = null;
-  openSheet(`${head('新建采购申报', '提交给采购。清单里没有的东西可以拍张照片。')}
+  openSheet(`${head('新建采购申报', '提交给设备部。清单里没有的东西可以拍张照片。')}
     <div class="field"><label>物品</label><input id="bn" placeholder="搜清单里的物品，或直接写新名称" autocomplete="off"><div id="bs"></div></div>
     <div class="field" id="newFields" hidden><label>规格 / 单位（清单外物品）</label><div style="display:flex;gap:8px"><input id="bsp" placeholder="规格"><input id="bu" placeholder="单位" style="max-width:110px"></div>
       <div style="margin-top:8px"><label class="btn sm line2 filebtn">拍照${camInput('id="bc"')}</label> <span id="bpv" class="sub"></span></div></div>
@@ -1137,7 +1137,7 @@ function openNewBuy() {
     <div class="btns"><button class="btn line2" id="add">加到清单</button></div>
     <div class="sec"><h3>采购清单</h3><div id="bl"><div class="mini"><span>还没有添加</span></div></div></div>
     <div class="field"><label>备注（可不填）</label><input id="bnote"></div>
-    <div class="btns"><button class="btn pri" id="send">提交给采购</button></div>`, sh => {
+    <div class="btns"><button class="btn pri" id="send">提交给设备部</button></div>`, sh => {
     const g = s => sh.querySelector(s);
     const drawSug = () => {
       const q = g('#bn').value.trim();
@@ -1164,7 +1164,7 @@ function openNewBuy() {
     g('#send').onclick = () => {
       if (!lines.length) return alert('先把物品加到清单');
       DB.commit([{ op: 'set', c: 'requests', id: uid(), d: clean({ kind: 'buy', t: now(), requester: me.name, lines, note: g('#bnote').value.trim(), status: 'pending' }) }]);
-      closeSheet(); toast('已提交给采购');
+      closeSheet(); toast('已提交给设备部');
     };
   });
 }
@@ -1188,7 +1188,7 @@ function openBuyEdit(r) {
       return `<div class="eline ${l.drop ? 'off' : ''}" data-i="${i}">
         <div class="t1"><b>${esc(p.name)} ${esc(p.spec)}</b>
           ${l.added && !l.arr ? `<button class="link" data-rm="${i}">移除</button>` : `<button class="link" data-drop="${i}">${l.drop ? '恢复' : '不买'}</button>`}</div>
-        ${l.added ? '<div class="sub">采购新增</div>' : `<div class="sub">申购 ${esc(l.name)} ${esc(l.spec || '')} ${fmt(l.qty)} ${esc(l.unit || '')}${l.arr ? `，已到货 ${fmt(l.arr)}` : ''}</div>`}
+        ${l.added ? '<div class="sub">设备部新增</div>' : `<div class="sub">申购 ${esc(l.name)} ${esc(l.spec || '')} ${fmt(l.qty)} ${esc(l.unit || '')}${l.arr ? `，已到货 ${fmt(l.arr)}` : ''}</div>`}
         ${l.drop ? '' : `<div class="row2"><span class="sub">买</span><input data-q="${i}" inputmode="decimal" value="${fmt(p.qty)}"><span>${esc(p.unit)}</span><button class="link" data-sp="${i}" style="margin-left:auto">改规格</button></div>
         <div class="specbox" data-box="${i}" hidden><input data-f="name" placeholder="名称" value="${esc(p.name)}"><input data-f="spec" placeholder="规格" value="${esc(p.spec)}"><input data-f="unit" placeholder="单位" value="${esc(p.unit)}" style="max-width:72px"></div>`}
       </div>`;
@@ -1275,7 +1275,7 @@ function openReceive(r) {
   g('#rl').innerHTML = rows.length ? rows.map(x => { const v = recvOf(x.l); const p = planOf(x.l);
     return `<div class="eline" data-i="${x.i}">
       <div class="t1"><b>${esc(v.name)} ${esc(v.spec)}</b><button class="link" data-sp="${x.i}">改规格</button></div>
-      <div class="sub">${x.l.added ? '采购新增' : `申购 ${fmt(x.l.qty)}`}${!x.l.added && p.qty !== x.l.qty ? `，采购调整 ${fmt(p.qty)}` : ''}${x.l.inq ? `，已收 ${fmt(x.l.inq)}` : ''}，还差 ${fmt(x.left)} ${esc(v.unit)}</div>
+      <div class="sub">${x.l.added ? '设备部新增' : `申购 ${fmt(x.l.qty)}`}${!x.l.added && p.qty !== x.l.qty ? `，设备部调整 ${fmt(p.qty)}` : ''}${x.l.inq ? `，已收 ${fmt(x.l.inq)}` : ''}，还差 ${fmt(x.left)} ${esc(v.unit)}</div>
       <div class="row2"><span class="sub">收到</span><input data-q="${x.i}" inputmode="decimal" value="${fmt(x.left)}"><span>${esc(v.unit)}</span></div>
       <div class="specbox" data-box="${x.i}" hidden><input data-f="name" placeholder="名称" value="${esc(v.name)}"><input data-f="spec" placeholder="规格" value="${esc(v.spec)}"><input data-f="unit" placeholder="单位" value="${esc(v.unit)}" style="max-width:72px"></div>
     </div>`; }).join('') : '<div class="note">清单上的东西都已经收齐了。</div>';
